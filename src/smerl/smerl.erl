@@ -110,7 +110,10 @@
 	 extend/3,
 	 extend/4,
 	 to_src/1,
-	 to_src/2
+	 to_src/2,
+	 module_package/1,
+	 module_package/2,
+	 module_dir/1
 	]).
 
 -define(L(Obj), io:format("LOG ~s ~w ~p\n", [?FILE, ?LINE, Obj])).
@@ -344,7 +347,7 @@ get_dirs_in_dir(Dir) ->
 %% @doc Try to infer module source files from the beam code path.
 get_forms_from_binary(Module, OrigErr) ->
     Ret = 
-	case code:where_is_file(atom_to_list(Module) ++ ".beam") of
+	case code:where_is_file(module_to_list(Module) ++ ".beam") of
 	    non_existing ->
 		OrigErr;
 	    Filename ->
@@ -368,7 +371,7 @@ get_forms_from_binary(Module, OrigErr) ->
 get_forms_from_file_list(_Module, _Basedir, []) ->
     [];
 get_forms_from_file_list(Module, Basedir, [H|T]) ->
-    Filename = H ++ "/" ++ atom_to_list(Module) ++ ".erl",
+    Filename = H ++ "/" ++ module_to_list(Module) ++ ".erl",
     case file:read_file_info(Filename) of
 	{ok, #file_info{type=regular}} ->
 	    epp:parse_file(Filename, [filename:dirname(Filename)], []);
@@ -586,7 +589,7 @@ compile(MetaMod, Options) ->
 	     {attribute, 3, export, get_exports(MetaMod)}],
     FileName =
 	case MetaMod#meta_mod.file of
-	    undefined -> atom_to_list(get_module(MetaMod));
+	    undefined -> module_to_list(get_module(MetaMod));
 	    Val -> Val
 	end,
 
@@ -595,12 +598,13 @@ compile(MetaMod, Options) ->
     
     case compile:forms(Forms2, Options) of
 	{ok, Module, Bin} ->
+	    ModuleDir = module_dir(MetaMod#meta_mod.module),
 	    Res = 
 		case lists:keysearch(outdir, 1, Options) of
 		    {value, {outdir, OutDir}} ->
 			file:write_file(
 			  OutDir ++
-			  ['/' | atom_to_list(MetaMod#meta_mod.module)] ++
+			  ['/' | ModuleDir] ++
 			  ".beam", Bin);
 		    false -> ok
 		end,
@@ -609,7 +613,7 @@ compile(MetaMod, Options) ->
 		    code:purge(Module),
 		    case code:load_binary(
 			   Module,
-			   atom_to_list(Module) ++ ".erl", Bin) of
+			   ModuleDir ++ ".erl", Bin) of
 			{module, _Module} ->
 			    ok;
 			Err ->
@@ -961,6 +965,13 @@ extend(Parent, Child, ArityDiff, Options) ->
 			{ExportName, ExportArity} <-
 			    ChildExports],
     ExportsDiff = ParentExports -- ChildExports1,
+    % If there's no package prefix we'll use default package injecting ''. in the call.
+    % I used io:parse_erl_form(". "). to figure that code out. Thanks Yariv! :)
+    ParentFunctionReference =
+	case (packages:is_segmented(Parent)) of
+            true -> {atom,1,ParentName};
+	    false -> {record_field,1,{atom,1,''},{atom,1,ParentName}}
+	end,
     NewChild =
 	lists:foldl(
 	  fun({FuncName, Arity}, ChildMod1) ->
@@ -976,7 +987,8 @@ extend(Parent, Child, ArityDiff, Options) ->
 			      Clause1 =
 				  {clause,1,Params,[],
 				   [{call,1,
-				     {remote,1,{atom,1,ParentName},
+				     {remote,1,
+				     ParentFunctionReference,
 				      {atom,1,FuncName}},
 				     Params}]},
 			      {function,1,FuncName,Arity, [Clause1]}
@@ -1046,3 +1058,35 @@ to_src(MetaMod) ->
 to_src(MetaMod, FileName) ->
     Src = to_src(MetaMod),
     file:write_file(FileName, list_to_binary(Src)).
+
+% --------------------------------------------------------------------------------
+%                     Package handling functions
+% --------------------------------------------------------------------------------
+module_package(Module) when is_atom(Module) ->
+    Module;
+module_package(Module) ->
+   list_to_atom(module_to_list(Module)).
+
+module_package(Package, File) when is_atom(File)->
+    module_package(Package, atom_to_list(File));
+module_package(Package, File) ->
+    list_to_atom(module_to_list(Package) ++ "." ++ File).
+
+module_to_list(Module) when is_atom(Module) ->
+	atom_to_list(Module);
+module_to_list(Module) ->
+    if	(is_atom(hd(Module))) ->
+        packages:concat(Module);
+        true -> Module
+    end.
+
+module_dir(Module) when is_atom(Module) ->
+    case packages:is_segmented(Module) of
+	true -> string:join(packages:split(Module), "/");
+	false -> atom_to_list(Module)
+    end;
+module_dir(Module) ->
+    if	(is_atom(hd(Module))) ->
+        string:join(lists:map({erlang,atom_to_list}, Module), "/");
+        true -> Module
+    end.

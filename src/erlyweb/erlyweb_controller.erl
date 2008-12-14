@@ -29,8 +29,9 @@ list(A, Model) ->
 list(A, Model, Page) when is_list(Page) ->
     list(A, Model, list_to_integer(Page));
 
-list(A, Model, Page) when is_integer(Page) ->    
-    Records = Model:find_range((Page - 1) * ?RECORDS_PER_PAGE,
+list(A, Model, Page) when is_integer(Page) ->
+    ModelModule = smerl:module_package(erlyweb:get_app_name(A), Model),
+    Records = ModelModule:find_range((Page - 1) * ?RECORDS_PER_PAGE,
 			       ?RECORDS_PER_PAGE),
 
     %% this function makes the 'edit' links in the record ids
@@ -38,7 +39,7 @@ list(A, Model, Page) when is_integer(Page) ->
 	fun(Val, Field) ->
 		case erlydb_field:name(Field) of
 		    id ->
-			Id = Model:field_to_iolist(Val),
+			Id = ModelModule:field_to_iolist(Val),
 			erlyweb_html:a(
 			  [case erlyweb:get_app_root(A) of
 			       "/" -> "";
@@ -52,22 +53,25 @@ list(A, Model, Page) when is_integer(Page) ->
 	end,
     {data, {erlyweb:get_app_root(A),
 	    atom_to_list(Model),
-	    Model:db_field_names_bin(),
-	    Model:to_iolist(Records, ToIoListFun)}}.
+	    ModelModule:db_field_names_bin(),
+	    ModelModule:to_iolist(Records, ToIoListFun)}}.
 
 new(A, Model) ->
-    Rec = Model:new(),
+    ModelModule = smerl:module_package(erlyweb:get_app_name(A), Model),
+    Rec = ModelModule:new(),
     new_or_edit(A, Model, Rec).
 
 edit(A, Model, Id) ->
-    Rec = Model:find_id(Id),
+    ModelModule = smerl:module_package(erlyweb:get_app_name(A), Model),
+    Rec = ModelModule:find_id(Id),
     new_or_edit(A, Model, Rec).
 
 new_or_edit(A, Model, Record) ->
-    Fields = tl(Model:db_fields()),
-    Vals = tl(Model:to_iolist(Record)),
+    ModelModule = smerl:module_package(erlyweb:get_app_name(A), Model),
+    Fields = tl(ModelModule:db_fields()),
+    Vals = tl(ModelModule:to_iolist(Record)),
     Combined = lists:zip(Fields, Vals),
-    IdStr = case Model:id(Record) of
+    IdStr = case ModelModule:id(Record) of
 		undefined -> [];
 		Id -> integer_to_list(Id)
 	    end,
@@ -84,18 +88,19 @@ new_or_edit(A, Model, Record) ->
 		    FieldData}};
 	'POST' ->
 	    NewVals = yaws_api:parse_post(A),
-	    Record1 = Model:set_fields_from_strs(Record, NewVals),
-	    Model:save(Record1),
+	    Record1 = ModelModule:set_fields_from_strs(Record, NewVals),
+	    ModelModule:save(Record1),
 	    {ewr, Model, list}
     end.
 
 delete(A, Model, Id) ->
+    ModelModule = smerl:module_package(erlyweb:get_app_name(A), Model),
     case yaws_arg:method(A) of
 	'GET' ->
-	    Record = Model:find_id(Id),
+	    Record = ModelModule:find_id(Id),
 	    Fields = [erlydb_field:name_bin(Field) ||
-			 Field <- Model:db_fields()],
-	    Vals = Model:to_iolist(Record),
+			 Field <- ModelModule:db_fields()],
+	    Vals = ModelModule:to_iolist(Record),
 	    Combined =
 		lists:zipwith(
 		  fun(Field, Val) -> [Field, Val] end,
@@ -105,7 +110,7 @@ delete(A, Model, Id) ->
 		    atom_to_list(Model), Id,
 		    Combined}};
 	'POST' ->
-	    Model:delete_id(Id),
+	    ModelModule:delete_id(Id),
 	    {ewr, Model, list}
     end.
     

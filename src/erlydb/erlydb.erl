@@ -377,8 +377,13 @@ gen_module_code(ModulePath, DefaultDriverMod,
 	       DriversData, Options, IncludePaths, Macros) ->   
     case smerl:for_module(ModulePath, IncludePaths, Macros) of
 	{ok, C1} ->
-	    C2 = preprocess_and_compile(C1),
-	    Module = smerl:get_module(C2),
+	    % Davide was here
+	    % C2 = preprocess_and_compile(C1),
+	    % Module = smerl:get_module(C2),
+	    C2_Temp = preprocess_and_compile(C1),
+	    Module1 = smerl:get_module(C2_Temp),
+	    Module = smerl:module_package(Module1),
+	    C2 = smerl:set_module(C2_Temp, Module),
 
 	    %% get the ErlyDB settings for the driver, taking the defaults
 	    %% into account
@@ -476,11 +481,7 @@ get_driver_settings(Module, DriversData, DefaultDriverMod) ->
     end.
 
 get_table(Module) ->
-    case catch Module:table() of
-	{'EXIT', _} -> Module;
-	default -> Module;
-	Res -> Res
-    end.
+    erlydb_base:db_table(Module).
 
 %% Make the abstract forms for the module.
 make_module(DriverMod, MetaMod, DbFields, Options, TablesData) ->

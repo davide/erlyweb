@@ -14,8 +14,8 @@
 
 -export([
 	 create_app/2,
-	 create_component/2,
 	 create_component/3,
+	 create_component/4,
 	 compile/1,
 	 compile/2,
 	 out/1,
@@ -50,10 +50,10 @@ create_app(AppName, AppDir) ->
 	Other -> Other
     end.
 
-%% @equiv create_component(Component, AppDir, [{magic, on}, {model, on}, 
+%% @equiv create_component(AppName, Component, AppDir, [{magic, on}, {model, on}, 
 %%                                             {erltl, off}])
-create_component(Component, AppDir) ->
-    create_component(Component, AppDir, [{magic, on}, {model, on},
+create_component(AppName, Component, AppDir) ->
+    create_component(AppName, Component, AppDir, [{magic, on}, {model, on},
 					{erltl, off}]).
 
 %% @doc Create all files (model, view, and controller) for a component
@@ -79,10 +79,10 @@ create_component(Component, AppDir) ->
 %%   This tells Erlyweb whether the view file should be an ErlTL file, or
 %%   an Erlang source file.
 %%
-%% @spec create_component(Component::atom(), AppDir::string(), 
+%% @spec create_component(AppName::string(), Component::atom(), AppDir::string(), 
 %%    Options::[option()]) -> ok | {error, Err}
-create_component(Component, AppDir, Options) ->
-    case catch erlyweb_util:create_component(Component, AppDir, Options) of
+create_component(AppName, Component, AppDir, Options) ->
+    case catch erlyweb_util:create_component(AppName, Component, AppDir, Options) of
 	{'EXIT', Err} ->
 	    {error, Err};
 	Other -> Other
@@ -344,7 +344,8 @@ get_initial_ewc1({ewc, A} = Ewc) ->
 get_initial_ewc1({ewc, A}, AppData) ->
     case get_ewc(A, AppData) of
 	{ewc, Controller, _View, _FuncName, _Params} = Ewc ->
-	    case Controller:private() of
+	    ControllerModule = smerl:module_package(get_app_name(A), Controller),
+	    case ControllerModule:private() of
 		true -> exit({illegal_request, Controller});
 		false -> {Ewc, []}
 	    end;
@@ -393,9 +394,10 @@ ewc({ewc, Component, FuncName, Params}, AppData) ->
     end;
 
 ewc({ewc, Controller, View, FuncName, [A | _] = Params}, AppData) ->
-    {FuncName1, Params1} = Controller:before_call(FuncName, Params),
-    Response = apply(Controller, FuncName1, Params1),    
-    Response1 = Controller:before_return(FuncName1, Params1, Response),
+    ControllerModule = smerl:module_package(get_app_name(A), Controller),
+    {FuncName1, Params1} = ControllerModule:before_call(FuncName, Params),
+    Response = apply(ControllerModule, FuncName1, Params1),    
+    Response1 = ControllerModule:before_return(FuncName1, Params1, Response),
     case Response1 of
 	({replace, Ewc})  when is_tuple(Ewc), element(1, Ewc) ==
 			       'ewc'->
@@ -467,8 +469,10 @@ render_response_body(A, Response, Controller, View, FuncName, Params,
 	     end,
     RenderFun =
 	fun(Ewc1) ->
-		Rendered = View:FuncName(render_subcomponent(Ewc1, AppData)),
-		Controller:after_render(FuncName, Params, Rendered),
+		ViewModule = smerl:module_package(get_app_name(A), View),
+		Rendered = ViewModule:FuncName(render_subcomponent(Ewc1, AppData)),
+		ControllerModule = smerl:module_package(get_app_name(A), Controller),
+		ControllerModule:after_render(FuncName, Params, Rendered),
 		Rendered
 	end,
     Elems3 = lists:map( 
@@ -561,5 +565,4 @@ get_app_root(A) ->
 
 get_app_data(A) ->
     proplists:get_value(app_data_module, yaws_arg:opaque(A)).
-
 

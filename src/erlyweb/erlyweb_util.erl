@@ -10,7 +10,7 @@
 
 -module(erlyweb_util).
 -author("Yariv Sadan (yarivsblog@gmail.com, http://yarivsblog.com").
--export([log/5, create_app/2, create_component/3,
+-export([log/5, create_app/2, create_component/4,
 	 get_url_prefix/1,
 	 get_cookie/2, indexify/2]).
 
@@ -29,11 +29,12 @@ create_app(AppName, Dir) ->
 	true ->
 	    AppDir = Dir ++ "/" ++ AppName,
 	    Dirs =
-		[SrcDir, ComponentsDir, WebDir, _EbinDir]
+		[SrcDir, ComponentsDir, WebDir, _EbinDir, _PackageEbinDir]
 		= [AppDir ++ "/src",
 		   AppDir ++ "/src/components",
 		   AppDir ++ "/www",
-		   AppDir ++ "/ebin"],
+		   AppDir ++ "/ebin",
+		   AppDir ++ "/ebin/" ++AppName],
 	    lists:foreach(
 	      fun(SubDir) ->
 		      ?Info("creating ~p", [SubDir]),
@@ -49,8 +50,8 @@ create_app(AppName, Dir) ->
 		[{ComponentsDir ++ "/html_container_view.et",
 		  html_container_view(AppName)},
 		 {ComponentsDir ++ "/html_container_controller.erl",
-		  html_container_controller()},
-		 {SrcDir ++ "/" ++ AppName ++ "_app_controller.erl",
+		  html_container_controller(AppName)},
+		 {SrcDir ++ "/app_controller.erl",
 		  app_controller(AppName)},
 		 {WebDir ++ "/index.html",
 		  index(AppName)},
@@ -83,7 +84,7 @@ create_file(FileName, Bin) ->
 	
 app_controller(AppName) ->
     Text =
-	["-module(", AppName, "_app_controller).\n"
+	["-module(", AppName, ".app_controller).\n"
 	 "-export([hook/1]).\n\n"
 	 "hook(A) ->\n"
 	 "\t{phased, {ewc, A},\n"
@@ -92,9 +93,9 @@ app_controller(AppName) ->
 	 "\t\tend}."],
     iolist_to_binary(Text).
 
-html_container_controller() ->
+html_container_controller(AppName) ->
     Text =
-	["-module(html_container_controller).\n"
+	["-module(" ++ AppName ++ ".html_container_controller).\n"
 	 "-export([private/0, index/2]).\n\n"
 	 "private() ->\n"
 	 "\ttrue.\n\n"
@@ -108,7 +109,7 @@ html_container_view(AppName) ->
 	 "<html>\n"
 	 "<head>\n"
 	 "<title>", AppName, "</title>\n"
-	 "<link rel=\"stylesheet\" href=\"/style.css\""
+	 "<link rel=\"stylesheet\" href=\"./style.css\""
 	 " type=\"text/css\">\n"
 	 "</style>\n"
 	 "</head>\n"
@@ -131,7 +132,7 @@ index(AppName) ->
     Text =
 	["<html>\n"
 	 "<head>\n"
-	 "<link rel=\"stylesheet\" href=\"/style.css\">\n"
+	 "<link rel=\"stylesheet\" href=\"./style.css\">\n"
 	 "<title>", AppName, "</title>\n</head>\n",
 	 "<body>\n"
 	 "<div id=\"content\">\n"
@@ -170,9 +171,9 @@ magic_declaration(MagicStr, {erltl, off}) ->
 magic_declaration(MagicStr, {erltl, on}) ->
     "<%~ -erlyweb_magic(" ++ MagicStr ++ "_view). %>".
 
-view_declaration(ComponentName, {ertl, off}) ->
-    "-module(" ++ ComponentName ++ "_view).\n";
-view_declaration(_ComponentName, {ertl, on}) ->
+view_declaration(AppName, ComponentName, {ertl, off}) ->
+    "-module("++ AppName ++"." ++ ComponentName ++ "_view).\n";
+view_declaration(_AppName, _ComponentName, {ertl, on}) ->
     "".
 
 view_filename(ComponentName, {ertl, off}) ->
@@ -186,7 +187,7 @@ model_filename(ComponentName, {model, on}) ->
     ComponentName ++ ".erl".
     
 %% @hidden
-create_component(ComponentName, AppDir, Options) ->
+create_component(AppName, ComponentName, AppDir, Options) ->
     {Magic, Model, Erltl} = {proplists:get_value(magic, Options, on),
 			     proplists:get_value(model, Options, on),
 			     proplists:get_value(erltl, Options, off)},
@@ -213,12 +214,12 @@ create_component(ComponentName, AppDir, Options) ->
     Files = lists:filter(fun({"", _Bin}) -> false;
 			    (_) -> true end,
 			 [{model_filename(ComponentName, {model, Model}),
-			   "-module(" ++ ComponentName ++ ")."},
+			   "-module(" ++ AppName ++ "." ++ ComponentName ++ ")."},
 			  {ComponentName ++ "_controller.erl",
-			   "-module(" ++ ComponentName ++ "_controller).\n" ++
+			   "-module(" ++ AppName ++ "." ++ ComponentName ++ "_controller).\n" ++
 			   magic_declaration(MagicStr, controller)},
 			  {view_filename(ComponentName, {ertl, Erltl}),
-			   view_declaration(ComponentName, {ertl, Erltl}) ++
+			   view_declaration(AppName, ComponentName, {ertl, Erltl}) ++
 			   magic_declaration(MagicStr, {erltl, Erltl})}]),
     
     lists:foreach(

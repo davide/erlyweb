@@ -245,12 +245,14 @@ type_field() ->
 %%
 %% @spec db_table(Module::atom()) -> atom()
 db_table(Module) ->
-    case Module:table() of
-	default ->
-	    Module;
-	Other ->
-	    Other
+    case catch Module:table() of
+	{'EXIT', _} -> get_table_from_package(Module);
+	default -> get_table_from_package(Module);
+	Res -> Res
     end.
+
+get_table_from_package(Module) ->
+    list_to_atom(packages:last(Module)).
 
 %% @doc Get the number of fields for the module.
 %%

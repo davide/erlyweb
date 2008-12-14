@@ -140,8 +140,8 @@
 
 -module(erltl).
 -author("Yariv Sadan (yarivsblog@gmail.com, http://yarivsblog.com)").
--export([compile/1, compile/2, forms_for_file/1, 
-	 forms_for_file/2, forms_for_data/2, forms_for_data/3]).
+-export([compile/1, compile/2, compile/3, forms_for_file/2, 
+	 forms_for_file/3, forms_for_data/2, forms_for_data/3]).
 
 -define(L(Msg), io:format("~b ~p~n", [?LINE, Msg])).
 
@@ -157,31 +157,41 @@ compile(FileName) ->
     compile(FileName, [{outdir, filename:dirname(FileName)},
 		       report_errors, report_warnings, nowarn_unused_vars]).
 
+%% @spec compile(FileName::string(), Options::[option()]) -> ok | {error, Err}
+compile(FileName, Options) ->
+    BaseName = filename:rootname(filename:basename(FileName)),
+    compile_in_module(list_to_atom(BaseName), FileName, Options).
+
+%% @spec compile(AppName::string(), FileName::string(), Options::[option()]) -> ok | {error, Err}
+compile(AppName, FileName, Options) ->
+    BaseName = filename:rootname(filename:basename(FileName)),
+    ModuleName = smerl:module_package(AppName, BaseName),
+    compile_in_module(ModuleName, FileName, Options).
+
 %% @doc Compile the ErlTL file with user-defined options. The options are
 %% described in the documentation for the 'compile' module.
 %% For more information, visit
 %% [http://erlang.org/doc/doc-5.5.1/lib/compiler-4.4.1/doc/html/compile.html]
 %%
-%% @spec compile(FileName::string(), Options::[option()]) -> ok | {error, Err}
-compile(FileName, Options) ->
+%% @spec compile_in_module(ModuleName::any(), FileName::string(), Options::[option()]) -> ok | {error, Err}
+compile_in_module(ModuleName, FileName, Options) ->
     IncludePaths = lists:foldl(
 		     fun({i, Path}, Acc) ->
 			     [Path | Acc];
 			(_Other, Acc) ->
 			     Acc
 		     end, [], Options),
-    case forms_for_file(FileName, IncludePaths) of
+    case forms_for_file(ModuleName, FileName, IncludePaths) of
 	{ok, Forms} ->
-	    case compile:forms(Forms,
-			       Options) of
+	    case compile:forms(Forms, Options) of
 		{ok, Module, Bin} ->
 		    OutDir = case lists:keysearch(outdir, 1, Options)
 				 of
 				 {value, {outdir, Val}} -> Val;
 				 false -> filename:dirname(FileName)
 			     end,
-		    BaseName = filename:rootname(filename:basename(FileName)),
-		    case file:write_file(OutDir ++ ['/' | BaseName] ++
+		    ModuleDir = smerl:module_dir(Module),
+		    case file:write_file(OutDir ++ ['/' | ModuleDir] ++
 					 ".beam", Bin) of
 			ok ->
 			    code:purge(Module),
@@ -204,18 +214,17 @@ compile(FileName, Options) ->
 
 
 %% @equiv forms_for_file(Filename, [])
-forms_for_file(FileName) ->
-    forms_for_file(FileName, []).
+forms_for_file(ModuleName, FileName) ->
+    forms_for_file(ModuleName, FileName, []).
 
 %% @doc Parse the ErlTL file and return its representation in Erlang
 %%   abstract forms.
 %% @spec forms_for_file(FileName::string(),
 %%   IncludePaths::[string()]) -> {ok, [form()]} | {error, Err}
-forms_for_file(FileName, IncludePaths) ->
+forms_for_file(ModuleName, FileName, IncludePaths) ->
     case file:read_file(FileName) of
 	{ok, Binary} ->
-	    BaseName = filename:rootname(filename:basename(FileName)),
-	    forms_for_data(Binary, list_to_atom(BaseName), IncludePaths);
+	    forms_for_data(Binary, ModuleName, IncludePaths);
 	Err ->
 	    Err
     end.

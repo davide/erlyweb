@@ -84,10 +84,10 @@ compile(AppDir, Options) ->
                                        calendar:datetime_to_gregorian_seconds(DateTime)
                                end,
 
-    AppControllerStr = AppName ++ "_app_controller",
+    AppControllerStr = "app_controller",
     AppControllerFile = AppControllerStr ++ ".erl",
     AppControllerFilePath = AppDir1 ++ "src/" ++ AppControllerFile,
-    case compile_file(AppControllerFilePath,
+    case compile_file(AppName, AppControllerFilePath,
 		      AppControllerStr, ".erl", undefined,
 		      LastCompileTimeInSeconds, Options3, IncludePaths, Macros) of
 	{ok, _} -> ok;
@@ -106,7 +106,7 @@ compile(AppDir, Options) ->
 	  AppDir1 ++ "src", "\.(erl|et)$", true,
 	  fun(FileName, Acc) ->
 		  if FileName =/= AppControllerFilePath ->
-			  compile_component_file(
+			  compile_component_file(AppName,
 			    ComponentsDir, http_util:to_lower(FileName),
 			    LastCompileTimeInSeconds, Options3, IncludePaths, Macros,
 			    Acc);
@@ -173,10 +173,10 @@ make_app_data_module(AppDir, AppData, AppName,
 	     [erl_parse:abstract(ComponentTree)]}]}),
 
     {ok, M4} = smerl:add_func(
-		 M2, "get_view() -> " ++ AppName ++ "_app_view."),
+		 M2, "get_view() -> " ++ AppName ++ ".app_view."),
     {ok, M5} = smerl:add_func(
 		 M4, "get_controller() -> " ++
-		 AppName ++ "_app_controller."),
+		 AppName ++ ".app_controller."),
 
     AbsFunc =
 	make_get_component_function(ComponentTree),
@@ -321,7 +321,7 @@ addFinalClauses(Clauses, ComponentStr, Exports) ->
     LastClauses ++ Clauses.
 
 
-compile_component_file(ComponentsDir, FileName, LastCompileTimeInSeconds,
+compile_component_file(AppName, ComponentsDir, FileName, LastCompileTimeInSeconds,
 		       Options, IncludePaths, Macros, {ComponentTree, Models} = Acc) ->
     BaseName = filename:rootname(filename:basename(FileName)),
     Extension = filename:extension(FileName),
@@ -338,12 +338,12 @@ compile_component_file(ComponentsDir, FileName, LastCompileTimeInSeconds,
 	       false ->
 		   other
 	   end,
-    case {compile_file(FileName, BaseName, Extension, Type,
+    case {compile_file(AppName, FileName, BaseName, Extension, Type,
 		       LastCompileTimeInSeconds, Options, IncludePaths, Macros),
 	  Type} of
 	{{ok, Module}, controller} ->
 	    [{exports, Exports} | _] =
-		Module:module_info(),
+		(smerl:module_package(Module)):module_info(),
 	    Exports1 =
 		lists:foldl(
 		  fun({Name, _}, Acc1)
@@ -368,18 +368,18 @@ compile_component_file(ComponentsDir, FileName, LastCompileTimeInSeconds,
 	{Err, _} -> exit(Err)
     end.
 
-compile_file(_FileName, [$. | _] = BaseName, _Extension, _Type, 
+compile_file(_AppName, _FileName, [$. | _] = BaseName, _Extension, _Type, 
 _LastCompileTimeInSeconds, _Options, _IncludePaths, _Macros) ->
     ?Debug("Ignoring file ~p", [BaseName]),
     {ok, ignore};
-compile_file(FileName, BaseName, Extension, Type,
+compile_file(AppName, FileName, BaseName, Extension, Type,
 	     LastCompileTimeInSeconds, Options, IncludePaths, Macros) ->
     case should_compile(FileName,BaseName,LastCompileTimeInSeconds) of
         true ->
             case Extension of
                 ".et" ->
                     ?Debug("Compiling ErlTL file ~p", [BaseName]),
-                    erltl:compile(FileName,
+                    erltl:compile(AppName, FileName,
                                   Options ++ [nowarn_unused_vars] ++
                                   [{i, P} || P <- IncludePaths]);
                 ".erl" ->
@@ -535,12 +535,11 @@ add_func(MetaMod, Name, Arity, Str) ->
 get_app_data_module(AppName) when is_atom(AppName) ->
     get_app_data_module(atom_to_list(AppName));
 get_app_data_module(AppName) when is_list(AppName) ->
-    list_to_atom(AppName ++ "_erlyweb_data").
+    list_to_atom(AppName ++ ".erlyweb_data").
 
 try_func(Module, FuncName, Params, Default) ->
-    case catch apply(Module, FuncName, Params) of
+    case catch apply(smerl:module_package(Module), FuncName, Params) of
 	{'EXIT', {undef, [{Module, FuncName, _} | _]}} -> Default;
 	{'EXIT', Err} -> exit(Err);
 	Val -> Val
     end.
-
