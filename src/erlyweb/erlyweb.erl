@@ -509,7 +509,7 @@ get_ewc(A) ->
 get_ewc(A, AppData) ->
     Prefix = erlyweb_util:get_url_prefix(A),
     case string:tokens(Prefix, "/") of
-	[] -> {page, "/"};
+	[] -> docroot_file(A);
 	[ComponentStr]->
 	    get_ewc(ComponentStr, "index", [A],
 		    AppData);
@@ -524,16 +524,26 @@ get_ewc(ComponentStr, FuncStr, [A | _] = Params,
 	{error, no_such_component} ->
 	    %% if the request doesn't match a controller's name,
 	    %% redirect it to /path
-	    Path = case yaws_arg:appmoddata(A) of
-		       [$/ | _ ] = P -> P;
-		       Other -> [$/ | Other]
-		   end,
-	    {page, Path};
+	    docroot_file(A);
 	{error, no_such_function} ->
 	    exit({no_such_function, {ComponentStr, FuncStr, length(Params)}});
 	{ok, Component} ->
 	    Component
     end.
+
+
+%% @doc Redirect to the application docroot.
+%% I'm counting that appmoddata was already sanitized elsewhere.
+%%
+%% @spec docroot_file(A::arg()) -> {page, NewPath::string()} | 
+%%									{redirect, NewUrl::string()}
+docroot_file(A) ->
+	case yaws_arg:appmoddata(A) of
+		undefined ->
+			{redirect, yaws_arg:server_path(A) ++ "/"};
+		Path ->
+			{page, Path}
+	end.
 
 %% @doc Get the name for the application as specified in the opaque 
 %% 'appname' field in the YAWS configuration.
