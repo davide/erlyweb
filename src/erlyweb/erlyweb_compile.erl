@@ -5,7 +5,7 @@
 
 %% For license information see LICENSE.txt
 -module(erlyweb_compile).
--export([compile/2, get_app_data_module/1, compile_file/5, compile_file/6]).
+-export([compile/2, compile/3, get_app_data_module/1, compile_file/5, compile_file/6]).
 
 -include_lib("kernel/include/file.hrl").
 
@@ -17,8 +17,14 @@
 
 -define(L(Msg), io:format("~b ~p~n", [?LINE, Msg])).
 
-
 compile(AppDir, Options) ->
+	AppName = filename:basename(AppDir),
+	compile(AppName, AppDir, Options).
+
+compile(AppName, AppDir, Options) when is_atom(AppName) ->
+	compile(atom_to_list(AppName), AppDir, Options);
+	
+compile(AppName, AppDir, Options) ->
     AppDir1 = case lists:reverse(AppDir) of
 		  [$/ | _] -> AppDir;
 		  Other -> lists:reverse([$/ | Other])
@@ -56,7 +62,6 @@ compile(AppDir, Options) ->
 
     file:make_dir(OutDir),
 
-    AppName = filename:basename(AppDir),
     AppData = get_app_data_module(AppName),
     InitialAcc =
 	case catch AppData:components() of

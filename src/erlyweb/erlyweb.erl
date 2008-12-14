@@ -18,6 +18,7 @@
 	 create_component/4,
 	 compile/1,
 	 compile/2,
+	 compile/3,
 	 out/1,
 	 out/2,
 	 get_initial_ewc/1,
@@ -145,6 +146,10 @@ compile(AppDir) ->
 compile(AppDir, Options) ->
     erlyweb_compile:compile(AppDir, Options).
 
+%% @spec compile(AppName::atom(), AppDir::string(), Options::[option()]) ->
+%%  {ok, Now::datetime()} | {error, Err}
+compile(AppName, AppDir, Options) ->
+    erlyweb_compile:compile(AppName, AppDir, Options).
 
 %% @doc This is the out/1 function that Yaws calls when passing
 %%  HTTP requests to the ErlyWeb appmod.
@@ -211,6 +216,7 @@ out(A, AppController) ->
 %% and that the request doesn't match the optional auto_compile_exclude
 %% value.
 auto_compile(A, AppData, Options) ->
+    AppName = get_app_name(A),
     [Now, Last] =
 	[calendar:datetime_to_gregorian_seconds(T) ||
 	    T <- [calendar:local_time(),
@@ -223,17 +229,17 @@ auto_compile(A, AppData, Options) ->
 		case string:str(yaws_arg:appmoddata(A),
 				Val) of
 		    1 -> ok;
-		    _ -> auto_compile1(AppData, Options)
+		    _ -> auto_compile1(AppName, AppData, Options)
 		end;
-	    false -> auto_compile1(AppData, Options)
+	    false -> auto_compile1(AppName, AppData, Options)
 	end;
        true ->
 	    ok
     end.
 
-auto_compile1(AppData, Options) ->
+auto_compile1(AppName, AppData, Options) ->
     AppDir = AppData:get_app_dir(),
-    case compile(AppDir, Options) of
+    case compile(AppName, AppDir, Options) of
         {ok, _} -> ok;
         Err -> exit(Err)
     end.
