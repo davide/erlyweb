@@ -231,10 +231,14 @@ create_component(ComponentName, AppDir, Options) ->
 %%
 %% @spec get_url_prefix(A::arg()) -> string()
 get_url_prefix(A) ->
-    lists:dropwhile(
-      fun($?) -> true;
-	 (_) -> false
-      end, yaws_arg:appmoddata(A)).
+    case yaws_arg:appmoddata(A) of
+	undefined -> "/";
+	AppModData ->
+	    lists:dropwhile(
+	      fun($?) -> true;
+		 (_) -> false
+	      end, AppModData)
+    end.
 
 
 %% @doc Get the cookie's value from the arg.
