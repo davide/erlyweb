@@ -73,7 +73,12 @@ create_app(AppName, Dir, Package) ->
 		 {WebDir ++ "/index.html",
 		  index(Package)},
 		 {WebDir ++ "/style.css",
-		  css()}],
+		  css()},
+		  {SrcDir ++ "/boot.erl", boot_file(Package)},
+		  {SrcDir ++ "/app.hrl", app_file(AppDir)},
+		  {AppDir ++ "/yaws.conf", yaws_conf(Package, AppName)},
+		  {AppDir ++ "/Makefile", makefile(AppName, PackageRelDir)},
+		  {AppDir ++ "/Emakefile", emakefile(PackageRelDir)}],
 	    lists:foreach(
 	      fun({FileName, Bin}) ->
 		      create_file(FileName, Bin)
@@ -98,6 +103,80 @@ create_file(FileName, Bin) ->
 		    exit({Err, FileName})
 	    end
     end.
+
+app_file(AppDir) ->
+    Text =
+	["-define(APP_PATH, \"" ++ AppDir ++ "\").\n"],
+    iolist_to_binary(Text).
+    
+boot_file(Package) ->
+    Text =
+	["-module(", Package, ".boot).\n"
+	 "-compile(export_all).\n"
+	 "-include(\"app.hrl\").\n\n"
+	 "start() ->\n"
+	"\tprocess_flag(trap_exit, true),\n"
+	"\tInets = (catch application:start(inets)),\n"
+	"\tstart_phase(compile, normal, []),\n"
+	"\t[{inets_start, Inets}].\n\n"
+	"start_phase(compile, _Type, _Args) ->\n"
+	"\tcompile(),\n"
+	"\tok.\n\n"
+	"compile() ->\n"
+	"compile(default, []).\n\n"
+	"compile_dev() ->\n"
+	"\tcompile(default, [{auto_compile, true}]).\n\n"
+	"compile_update() ->\n"
+	"\tcompile(default, [{last_compile_time, auto}]).\n\n"
+	"compile(AppDir) ->\n"
+	"\tcompile(AppDir, []).\n\n"
+	"\tcompile(AppDir, Opts) ->\n"
+	"\t.erlyweb:compile(" ++ Package ++ ", compile_dir(AppDir),\n"
+	"\t\t[{erlydb_driver, mysql}, {erlydb_timeout, 20000} | Opts]).\n\n"
+	"create_component(Component) ->\n"
+	"\tcreate_component(Component, default).\n\n"
+	"create_component(Component, AppDir) ->\n"
+	"\t.erlyweb:create_component(" ++ Package ++ ", compile_dir(AppDir), Component).\n\n"
+	"compile_dir(auto) ->\n"
+	"\t{ok, CWD} = .file:get_cwd(), CWD;\n"
+	"compile_dir(default) ->\n"
+	"\t?APP_PATH;\n"
+	"compile_dir(Dir) ->\n"
+	"\tDir.\n"],
+    iolist_to_binary(Text).
+
+yaws_conf(Package, AppName) ->
+    Text =
+	["logdir = log\n"
+	"ebin_dir = ebin\n"
+	"runmod = " ++ Package ++ ".boot\n\n"
+	"<server " ++ AppName ++ ">\n"
+	"\tport = 80\n"
+	"\tlisten = 0.0.0.0\n"
+	"\tdocroot = www\n"
+	"\tappmods = <\"/\", erlyweb>\n"
+	"\t<opaque>\n"
+	"\t\tpackage = " ++ Package ++ "\n"
+	"\t</opaque>\n"
+	"</server>\n"],
+    iolist_to_binary(Text).
+
+emakefile(Package) ->
+    Text =
+	["{\"src/boot.erl\", [{outdir, \"./ebin/" ++ Package ++ "\"}]}.\n"],
+    iolist_to_binary(Text).
+
+makefile(AppName, PackageRelDir) ->
+    Text =
+	["all: code\n\n"
+	"code: clean\n"
+	"\terl -s make all load -s init stop\n\n"
+	"run:	code\n"
+	"\terl -yaws debug -run yaws --conf yaws.conf -yaws id " ++ AppName ++ ".webserver\n\n"
+	"clean:\n"
+	"\trm -fv ./ebin/*.beam ./ebin/" ++ PackageRelDir ++ "/*.beam log/* erl_crash.dump\n"],
+    iolist_to_binary(Text).
+
 app_controller(Package) ->
     Text =
 	["-module(", Package, ".app_controller).\n"
