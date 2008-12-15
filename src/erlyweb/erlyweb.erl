@@ -23,6 +23,7 @@
 	 get_initial_ewc/1,
 	 get_ewc/1,
 	 get_app_package/1,
+	 get_app_module/2,
 	 get_app_root/1
 	]).
 
@@ -343,7 +344,7 @@ get_initial_ewc1({ewc, A} = Ewc) ->
 get_initial_ewc1({ewc, A}, AppData) ->
     case get_ewc(A, AppData) of
 	{ewc, Controller, _View, _FuncName, _Params} = Ewc ->
-	    ControllerModule = smerl:packaged_module(get_app_name(A), Controller),
+	    ControllerModule = get_app_module(A, Controller),
 	    case ControllerModule:private() of
 		true -> exit({illegal_request, Controller});
 		false -> {Ewc, []}
@@ -393,7 +394,7 @@ ewc({ewc, Component, FuncName, Params}, AppData) ->
     end;
 
 ewc({ewc, Controller, View, FuncName, [A | _] = Params}, AppData) ->
-    ControllerModule = smerl:packaged_module(get_app_name(A), Controller),
+    ControllerModule = get_app_module(A, Controller),
     {FuncName1, Params1} = ControllerModule:before_call(FuncName, Params),
     Response = apply(ControllerModule, FuncName1, Params1),    
     Response1 = ControllerModule:before_return(FuncName1, Params1, Response),
@@ -468,9 +469,9 @@ render_response_body(A, Response, Controller, View, FuncName, Params,
 	     end,
     RenderFun =
 	fun(Ewc1) ->
-		ViewModule = smerl:packaged_module(get_app_name(A), View),
+		ViewModule = get_app_module(A, View),
 		Rendered = ViewModule:FuncName(render_subcomponent(Ewc1, AppData)),
-		ControllerModule = smerl:packaged_module(get_app_name(A), Controller),
+		ControllerModule = get_app_module(A, Controller),
 		ControllerModule:after_render(FuncName, Params, Rendered),
 		Rendered
 	end,
@@ -576,3 +577,6 @@ get_app_package(A) ->
 	Val ->
 	    list_to_atom(Val)
     end.
+
+get_app_module(A, ModuleName) -> 
+    smerl:packaged_module(get_app_package(A), ModuleName).
