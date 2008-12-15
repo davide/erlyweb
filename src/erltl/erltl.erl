@@ -160,29 +160,29 @@ compile(FileName) ->
 %% @spec compile(FileName::string(), Options::[option()]) -> ok | {error, Err}
 compile(FileName, Options) ->
     BaseName = filename:rootname(filename:basename(FileName)),
-    ModuleName = smerl:packaged_module('', BaseName),
-    compile_in_module('', FileName, Options).
+    Module = smerl:packaged_module('', BaseName),
+    compile_in_module(Module, FileName, Options).
 
 %% @spec compile(InPackage::string(), FileName::string(), Options::[option()]) -> ok | {error, Err}
 compile(InPackage, FileName, Options) ->
     BaseName = filename:rootname(filename:basename(FileName)),
-    ModuleName = smerl:packaged_module(InPackage, BaseName),
-    compile_in_module(ModuleName, FileName, Options).
+    Module = smerl:packaged_module(InPackage, BaseName),
+    compile_in_module(Module, FileName, Options).
 
 %% @doc Compile the ErlTL file with user-defined options. The options are
 %% described in the documentation for the 'compile' module.
 %% For more information, visit
 %% [http://erlang.org/doc/doc-5.5.1/lib/compiler-4.4.1/doc/html/compile.html]
 %%
-%% @spec compile_in_module(ModuleName::any(), FileName::string(), Options::[option()]) -> ok | {error, Err}
-compile_in_module(ModuleName, FileName, Options) ->
+%% @spec compile_in_module(Module::atom(), FileName::string(), Options::[option()]) -> ok | {error, Err}
+compile_in_module(Module, FileName, Options) ->
     IncludePaths = lists:foldl(
 		     fun({i, Path}, Acc) ->
 			     [Path | Acc];
 			(_Other, Acc) ->
 			     Acc
 		     end, [], Options),
-    case forms_for_file(ModuleName, FileName, IncludePaths) of
+    case forms_for_file(Module, FileName, IncludePaths) of
 	{ok, Forms} ->
 	    case compile:forms(Forms, Options) of
 		{ok, Module, Bin} ->
@@ -214,36 +214,36 @@ compile_in_module(ModuleName, FileName, Options) ->
     end.
 
 
-%% @equiv forms_for_file(Filename, [])
-forms_for_file(ModuleName, FileName) ->
-    forms_for_file(ModuleName, FileName, []).
+%% @equiv forms_for_file(Module, Filename, [])
+forms_for_file(Module, FileName) ->
+    forms_for_file(Module, FileName, []).
 
 %% @doc Parse the ErlTL file and return its representation in Erlang
 %%   abstract forms.
-%% @spec forms_for_file(FileName::string(),
+%% @spec forms_for_file(Module::atom(), FileName::string(),
 %%   IncludePaths::[string()]) -> {ok, [form()]} | {error, Err}
-forms_for_file(ModuleName, FileName, IncludePaths) ->
+forms_for_file(Module, FileName, IncludePaths) ->
     case file:read_file(FileName) of
 	{ok, Binary} ->
-	    forms_for_data(Binary, ModuleName, IncludePaths);
+	    forms_for_data(Binary, Module, IncludePaths);
 	Err ->
 	    Err
     end.
 
-%% @equiv forms_form_data(Data, ModuleName, [])
-forms_for_data(Data, ModuleName) ->
-    forms_for_data(Data, ModuleName, []).
+%% @equiv forms_form_data(Data, Module, [])
+forms_for_data(Data, Module) ->
+    forms_for_data(Data, Module, []).
 
 %% @doc Parse the raw text of an ErlTL template and return its
 %%   representation in abstract forms.
-%% @spec forms_for_data(Data::binary() | string(), ModuleName::atom(),
+%% @spec forms_for_data(Data::binary() | string(), Module::atom(),
 %%   IncludePaths::[string()]) ->
 %%   {ok, [form()]} | {error, Err}
-forms_for_data(Data, ModuleName, IncludePaths) when is_binary(Data) ->
-    forms_for_data(binary_to_list(Data), ModuleName, IncludePaths);
-forms_for_data(Data, ModuleName, IncludePaths) ->
+forms_for_data(Data, Module, IncludePaths) when is_binary(Data) ->
+    forms_for_data(binary_to_list(Data), Module, IncludePaths);
+forms_for_data(Data, Module, IncludePaths) ->
     Lines = make_lines(Data),
-    case forms(Lines, ModuleName) of
+    case forms(Lines, Module) of
 	{ok, Forms} ->
 	    case catch lists:map(
 			 fun({attribute, _, include, Include}) ->
