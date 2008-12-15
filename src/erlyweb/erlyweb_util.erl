@@ -10,9 +10,14 @@
 
 -module(erlyweb_util).
 -author("Yariv Sadan (yarivsblog@gmail.com, http://yarivsblog.com").
--export([log/5, create_app/2, create_component/4,
+-export([
+	 create_app/3,
+	 create_component/4,
 	 get_url_prefix/1,
-	 get_cookie/2, indexify/2]).
+	 get_cookie/2,
+	 indexify/2,
+	 log/5
+	]).
 
 -define(Debug(Msg, Params), log(?MODULE, ?LINE, debug, Msg, Params)).
 -define(Info(Msg, Params), log(?MODULE, ?LINE, info, Msg, Params)).
@@ -24,17 +29,19 @@ log(Module, Line, Level, Msg, Params) ->
     io:format("~n").
 
 %% @hidden
-create_app(AppName, Dir) ->
+create_app(AppName, Dir, Package) when is_atom(Package) ->
+    create_app(AppName, Dir, atom_to_list(Package));
+
+create_app(AppName, Dir, Package) ->
     case filelib:is_dir(Dir) of
 	true ->
 	    AppDir = Dir ++ "/" ++ AppName,
-	    Dirs =
-		[SrcDir, ComponentsDir, WebDir, _EbinDir, _PackageEbinDir]
+	    Dirs = [SrcDir, ComponentsDir, WebDir, _EbinDir, _LogDir]
 		= [AppDir ++ "/src",
 		   AppDir ++ "/src/components",
 		   AppDir ++ "/www",
 		   AppDir ++ "/ebin",
-		   AppDir ++ "/ebin/" ++AppName],
+		   AppDir ++ "/log"],
 	    lists:foreach(
 	      fun(SubDir) ->
 		      ?Info("creating ~p", [SubDir]),
@@ -45,16 +52,26 @@ create_app(AppName, Dir) ->
 			      exit(Err)
 		      end
 	      end, [AppDir | Dirs]),
+	
+	    PackageRelDir = smerl:module_dir(Package),
+	    PackageDir = AppDir ++ "/ebin/" ++ PackageRelDir ++ "/",
+	    ?Info("creating package directory structure ~p", [PackageDir]),
+	      case filelib:ensure_dir(PackageDir) of
+		  ok ->
+		      ok;
+		  Err ->
+		      exit(Err)
+	      end,
 
 	    Files =
 		[{ComponentsDir ++ "/html_container_view.et",
 		  html_container_view(AppName)},
 		 {ComponentsDir ++ "/html_container_controller.erl",
-		  html_container_controller(AppName)},
+		  html_container_controller(Package)},
 		 {SrcDir ++ "/app_controller.erl",
-		  app_controller(AppName)},
+		  app_controller(Package)},
 		 {WebDir ++ "/index.html",
-		  index(AppName)},
+		  index(Package)},
 		 {WebDir ++ "/style.css",
 		  css()}],
 	    lists:foreach(
@@ -81,10 +98,9 @@ create_file(FileName, Bin) ->
 		    exit({Err, FileName})
 	    end
     end.
-	
-app_controller(AppName) ->
+app_controller(Package) ->
     Text =
-	["-module(", AppName, ".app_controller).\n"
+	["-module(", Package, ".app_controller).\n"
 	 "-export([hook/1]).\n\n"
 	 "hook(A) ->\n"
 	 "\t{phased, {ewc, A},\n"
@@ -93,9 +109,9 @@ app_controller(AppName) ->
 	 "\t\tend}."],
     iolist_to_binary(Text).
 
-html_container_controller(AppName) ->
+html_container_controller(Package) ->
     Text =
-	["-module(" ++ AppName ++ ".html_container_controller).\n"
+	["-module(" ++ Package ++ ".html_container_controller).\n"
 	 "-export([private/0, index/2]).\n\n"
 	 "private() ->\n"
 	 "\ttrue.\n\n"
@@ -171,9 +187,9 @@ magic_declaration(MagicStr, {erltl, off}) ->
 magic_declaration(MagicStr, {erltl, on}) ->
     "<%~ -erlyweb_magic(" ++ MagicStr ++ "_view). %>".
 
-view_declaration(AppName, ComponentName, {ertl, off}) ->
-    "-module("++ AppName ++"." ++ ComponentName ++ "_view).\n";
-view_declaration(_AppName, _ComponentName, {ertl, on}) ->
+view_declaration(Package, ComponentName, {ertl, off}) ->
+    "-module("++ Package ++"." ++ ComponentName ++ "_view).\n";
+view_declaration(_Package, _ComponentName, {ertl, on}) ->
     "".
 
 view_filename(ComponentName, {ertl, off}) ->
@@ -187,7 +203,10 @@ model_filename(ComponentName, {model, on}) ->
     ComponentName ++ ".erl".
     
 %% @hidden
-create_component(AppName, ComponentName, AppDir, Options) ->
+create_component(Package, AppDir, ComponentName, Options) when is_atom(Package) ->
+    create_component(atom_to_list(Package), AppDir, ComponentName, Options);
+
+create_component(Package, AppDir, ComponentName, Options) ->
     {Magic, Model, Erltl} = {proplists:get_value(magic, Options, on),
 			     proplists:get_value(model, Options, on),
 			     proplists:get_value(erltl, Options, off)},
@@ -197,6 +216,12 @@ create_component(AppName, ComponentName, AppDir, Options) ->
 	true ->
 	     void
      end,
+     
+    case (filelib:ensure_dir(AppDir ++ "/src/components/")) of
+	ok -> void;
+	{error, Reason} ->
+		exit({missing_directory, AppDir ++ "/src/components/", Reason})
+    end,
 
     MagicStr = if Magic == on ->
 		       "erlyweb";
@@ -214,12 +239,12 @@ create_component(AppName, ComponentName, AppDir, Options) ->
     Files = lists:filter(fun({"", _Bin}) -> false;
 			    (_) -> true end,
 			 [{model_filename(ComponentName, {model, Model}),
-			   "-module(" ++ AppName ++ "." ++ ComponentName ++ ")."},
+			   "-module(" ++ Package ++ "." ++ ComponentName ++ ")."},
 			  {ComponentName ++ "_controller.erl",
-			   "-module(" ++ AppName ++ "." ++ ComponentName ++ "_controller).\n" ++
+			   "-module(" ++ Package ++ "." ++ ComponentName ++ "_controller).\n" ++
 			   magic_declaration(MagicStr, controller)},
 			  {view_filename(ComponentName, {ertl, Erltl}),
-			   view_declaration(AppName, ComponentName, {ertl, Erltl}) ++
+			   view_declaration(Package, ComponentName, {ertl, Erltl}) ++
 			   magic_declaration(MagicStr, {erltl, Erltl})}]),
     
     lists:foreach(
@@ -240,7 +265,6 @@ get_url_prefix(A) ->
 		 (_) -> false
 	      end, AppModData)
     end.
-
 
 %% @doc Get the cookie's value from the arg.
 %% @equiv yaws_api:find_cookie_val(Name, yaws_headers:cookie(A))

@@ -5,7 +5,7 @@
 
 %% For license information see LICENSE.txt
 -module(erlyweb_compile).
--export([compile/2, compile/3, get_app_data_module/1, compile_file/5, compile_file/6]).
+-export([compile/3, get_app_data_module/1, compile_file/5, compile_file/6]).
 
 -include_lib("kernel/include/file.hrl").
 
@@ -17,14 +17,7 @@
 
 -define(L(Msg), io:format("~b ~p~n", [?LINE, Msg])).
 
-compile(AppDir, Options) ->
-	AppName = filename:basename(AppDir),
-	compile(AppName, AppDir, Options).
-
-compile(AppName, AppDir, Options) when is_atom(AppName) ->
-	compile(atom_to_list(AppName), AppDir, Options);
-	
-compile(AppName, AppDir, Options) ->
+compile(Package, AppDir, Options) ->
     AppDir1 = case lists:reverse(AppDir) of
 		  [$/ | _] -> AppDir;
 		  Other -> lists:reverse([$/ | Other])
@@ -62,7 +55,7 @@ compile(AppName, AppDir, Options) ->
 
     file:make_dir(OutDir),
 
-    AppData = get_app_data_module(AppName),
+    AppData = get_app_data_module(Package),
     InitialAcc =
 	case catch AppData:components() of
 	    {'EXIT', {undef, _}} -> {gb_trees:empty(), []};
@@ -92,7 +85,7 @@ compile(AppName, AppDir, Options) ->
     AppControllerStr = "app_controller",
     AppControllerFile = AppControllerStr ++ ".erl",
     AppControllerFilePath = AppDir1 ++ "src/" ++ AppControllerFile,
-    case compile_file(AppName, AppControllerFilePath,
+    case compile_file(Package, AppControllerFilePath,
 		      AppControllerStr, ".erl", undefined,
 		      LastCompileTimeInSeconds, Options3, IncludePaths, Macros) of
 	{ok, _} -> ok;
@@ -111,7 +104,7 @@ compile(AppName, AppDir, Options) ->
 	  AppDir1 ++ "src", "\.(erl|et)$", true,
 	  fun(FileName, Acc) ->
 		  if FileName =/= AppControllerFilePath ->
-			  compile_component_file(AppName,
+			  compile_component_file(Package,
 			    ComponentsDir, http_util:to_lower(FileName),
 			    LastCompileTimeInSeconds, Options3, IncludePaths, Macros,
 			    Acc);
@@ -139,8 +132,9 @@ compile(AppName, AppDir, Options) ->
     Result = 
 	if ErlyDBResult == ok ->
 		AppDataModule = make_app_data_module(
+				  Package,
 				  AppDir1,
-				  AppData, AppName,
+				  AppData,
 				  ComponentTree1,
 				  Options3),
 		smerl:compile(AppDataModule, Options3);
@@ -167,7 +161,7 @@ get_option(Name, Default, Options) ->
 	false -> {[{Name, Default} | Options], Default}
     end.
 
-make_app_data_module(AppDir, AppData, AppName,
+make_app_data_module(Package, AppDir, AppData,
 		     ComponentTree, Options) ->
     M1 = smerl:new(AppData),
     {ok, M2} =
@@ -178,10 +172,10 @@ make_app_data_module(AppDir, AppData, AppName,
 	     [erl_parse:abstract(ComponentTree)]}]}),
 
     {ok, M4} = smerl:add_func(
-		 M2, "get_view() -> " ++ AppName ++ ".app_view."),
+		 M2, "get_view() -> " ++ atom_to_list(Package) ++ ".app_view."),
     {ok, M5} = smerl:add_func(
 		 M4, "get_controller() -> " ++
-		 AppName ++ ".app_controller."),
+		 atom_to_list(Package) ++ ".app_controller."),
 
     AbsFunc =
 	make_get_component_function(ComponentTree),
@@ -326,7 +320,7 @@ addFinalClauses(Clauses, ComponentStr, Exports) ->
     LastClauses ++ Clauses.
 
 
-compile_component_file(AppName, ComponentsDir, FileName, LastCompileTimeInSeconds,
+compile_component_file(Package, ComponentsDir, FileName, LastCompileTimeInSeconds,
 		       Options, IncludePaths, Macros, {ComponentTree, Models} = Acc) ->
     BaseName = filename:rootname(filename:basename(FileName)),
     Extension = filename:extension(FileName),
@@ -343,7 +337,7 @@ compile_component_file(AppName, ComponentsDir, FileName, LastCompileTimeInSecond
 	       false ->
 		   other
 	   end,
-    case {compile_file(AppName, FileName, BaseName, Extension, Type,
+    case {compile_file(Package, FileName, BaseName, Extension, Type,
 		       LastCompileTimeInSeconds, Options, IncludePaths, Macros),
 	  Type} of
 	{{ok, Module}, controller} ->
@@ -373,18 +367,18 @@ compile_component_file(AppName, ComponentsDir, FileName, LastCompileTimeInSecond
 	{Err, _} -> exit(Err)
     end.
 
-compile_file(_AppName, _FileName, [$. | _] = BaseName, _Extension, _Type, 
+compile_file(_Package, _FileName, [$. | _] = BaseName, _Extension, _Type, 
 _LastCompileTimeInSeconds, _Options, _IncludePaths, _Macros) ->
     ?Debug("Ignoring file ~p", [BaseName]),
     {ok, ignore};
-compile_file(AppName, FileName, BaseName, Extension, Type,
+compile_file(Package, FileName, BaseName, Extension, Type,
 	     LastCompileTimeInSeconds, Options, IncludePaths, Macros) ->
     case should_compile(FileName,BaseName,LastCompileTimeInSeconds) of
         true ->
             case Extension of
                 ".et" ->
                     ?Debug("Compiling ErlTL file ~p", [BaseName]),
-                    erltl:compile(AppName, FileName,
+                    erltl:compile(Package, FileName,
                                   Options ++ [nowarn_unused_vars] ++
                                   [{i, P} || P <- IncludePaths]);
                 ".erl" ->
@@ -537,10 +531,8 @@ add_func(MetaMod, Name, Arity, Str) ->
 	    M1
     end.
 
-get_app_data_module(AppName) when is_atom(AppName) ->
-    get_app_data_module(atom_to_list(AppName));
-get_app_data_module(AppName) when is_list(AppName) ->
-    list_to_atom(AppName ++ ".erlyweb_data").
+get_app_data_module(Package) ->
+    smerl:packaged_module(Package, "erlyweb_data").
 
 try_func(Module, FuncName, Params, Default) ->
     case catch apply(smerl:packaged_module(Module), FuncName, Params) of

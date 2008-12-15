@@ -14,16 +14,15 @@
 
 -export([
 	 create_app/2,
+	 create_app/3,
 	 create_component/3,
 	 create_component/4,
-	 compile/1,
-	 compile/2,
 	 compile/3,
 	 out/1,
 	 out/2,
 	 get_initial_ewc/1,
 	 get_ewc/1,
-	 get_app_name/1,
+	 get_app_package/1,
 	 get_app_root/1
 	]).
 
@@ -39,22 +38,31 @@
 
 -define(L(Msg), io:format("~b ~p~n", [?LINE, Msg])).
 
-%% @doc Create a new ErlyWeb application in the directory AppDir.
-%% This function creates the standard ErlyWeb directory structure as well as
-%% a few basic files for a rudimantary application.
+%% @doc Create a new ErlyWeb application in the directory AppDir
+%% using the default package naming.
 %%
 %% @spec create_app(AppName::string(), AppDir::string()) -> ok | {error, Err}
 create_app(AppName, AppDir) ->
-    case catch erlyweb_util:create_app(AppName, AppDir) of
+    Package = get_app_package(AppName),
+    create_app(AppName, AppDir, Package).
+
+%% @doc Create a new ErlyWeb application in the directory AppDir.
+%% This function creates the standard ErlyWeb directory structure as well as
+%% a few basic files for a rudimentary application.
+%%
+%% @spec create_app(AppName::string(), AppDir::string(), Package::atom()) ->
+%%				ok | {error, Err}
+create_app(AppName, AppDir, Package) ->
+    case catch erlyweb_util:create_app(AppName, AppDir, Package) of
 	{'EXIT', Err} ->
 	    {error, Err};
 	Other -> Other
     end.
 
-%% @equiv create_component(AppName, Component, AppDir, [{magic, on}, {model, on}, 
-%%                                             {erltl, off}])
-create_component(AppName, Component, AppDir) ->
-    create_component(AppName, Component, AppDir, [{magic, on}, {model, on},
+%% @equiv create_component(Package, AppDir, Component, [{magic, on},
+%%                                             {model, on}, {erltl, off}])
+create_component(Package, AppDir, Component) ->
+    create_component(Package, AppDir, Component, [{magic, on}, {model, on},
 					{erltl, off}]).
 
 %% @doc Create all files (model, view, and controller) for a component
@@ -80,32 +88,22 @@ create_component(AppName, Component, AppDir) ->
 %%   This tells Erlyweb whether the view file should be an ErlTL file, or
 %%   an Erlang source file.
 %%
-%% @spec create_component(AppName::string(), Component::atom(), AppDir::string(), 
+%% @spec create_component(Package::string(), AppDir::string(), Component::atom(),
 %%    Options::[option()]) -> ok | {error, Err}
-create_component(AppName, Component, AppDir, Options) ->
-    case catch erlyweb_util:create_component(AppName, Component, AppDir, Options) of
+create_component(Package, AppDir, Component, Options) ->
+    case catch erlyweb_util:create_component(Package, AppDir, Component, Options) of
 	{'EXIT', Err} ->
 	    {error, Err};
 	Other -> Other
     end.
 
-%% @doc Compile all the files for an application. Files with the '.et'
-%%   extension are compiled with ErlTL.
-%%
-%%   This function returns `{ok, Now}', where Now is
-%%   the result of `calendar:local_time()'.
-%%   You can pass the second value in the options for the next call to
-%%   compile/2 to telling ErlyWeb to avoid recompiling files that haven't
-%%   changed (ErlyWeb does this automatically when the auto-compilation
-%%   is turned on).
-%%
-%% @spec compile(AppDir::string()) -> ok | {error, Err}
-compile(AppDir) ->
-    compile(AppDir, []).
-
 %% @doc Compile all the files for an application using the compilation
 %%  options as described in the 'compile' module in the Erlang
 %%  documentation ([http://erlang.org]).
+%%
+%%   This function returns `{ok, Now}', where Now is
+%%   the result of `calendar:local_time()'.
+%%
 %%  ErlyWeb also lets you define the following options:
 %%
 %%  - `{last_compile_time, LocalTime}': Tells ErlyWeb to not compile files
@@ -141,23 +139,18 @@ compile(AppDir) ->
 %% pool the MySQL dispatcher should use for querying database metadata.
 %% For more information, refer to your ErlyDB driver's documentation.
 %% 
-%% @spec compile(AppDir::string(), Options::[option()]) ->
+%% @spec compile(Package::atom(), AppDir::string(), Options::[option()]) ->
 %%  {ok, Now::datetime()} | {error, Err}
-compile(AppDir, Options) ->
-    erlyweb_compile:compile(AppDir, Options).
-
-%% @spec compile(AppName::atom(), AppDir::string(), Options::[option()]) ->
-%%  {ok, Now::datetime()} | {error, Err}
-compile(AppName, AppDir, Options) ->
-    erlyweb_compile:compile(AppName, AppDir, Options).
+compile(Package, AppDir, Options) ->
+    erlyweb_compile:compile(Package, AppDir, Options).
 
 %% @doc This is the out/1 function that Yaws calls when passing
 %%  HTTP requests to the ErlyWeb appmod.
 %%
 %% @spec out(A::yaws_arg()) -> ret_val()
 out(A) ->
-    AppName = get_app_name(A),
-    AppData = erlyweb_compile:get_app_data_module(AppName),
+    Package = get_app_package(A),
+    AppData = erlyweb_compile:get_app_data_module(Package),
     AppController =
 	case catch AppData:get_controller() of
 	    {'EXIT', {undef, _}} ->
@@ -216,7 +209,7 @@ out(A, AppController) ->
 %% and that the request doesn't match the optional auto_compile_exclude
 %% value.
 auto_compile(A, AppData, Options) ->
-    AppName = get_app_name(A),
+    Package = get_app_package(A),
     [Now, Last] =
 	[calendar:datetime_to_gregorian_seconds(T) ||
 	    T <- [calendar:local_time(),
@@ -229,17 +222,17 @@ auto_compile(A, AppData, Options) ->
 		case string:str(yaws_arg:appmoddata(A),
 				Val) of
 		    1 -> ok;
-		    _ -> auto_compile1(AppName, AppData, Options)
+		    _ -> auto_compile1(Package, AppData, Options)
 		end;
-	    false -> auto_compile1(AppName, AppData, Options)
+	    false -> auto_compile1(Package, AppData, Options)
 	end;
        true ->
 	    ok
     end.
 
-auto_compile1(AppName, AppData, Options) ->
+auto_compile1(Package, AppData, Options) ->
     AppDir = AppData:get_app_dir(),
-    case compile(AppName, AppDir, Options) of
+    case compile(Package, AppDir, Options) of
         {ok, _} -> ok;
         Err -> exit(Err)
     end.
@@ -545,21 +538,6 @@ docroot_file(A) ->
 			{page, Path}
 	end.
 
-%% @doc Get the name for the application as specified in the opaque 
-%% 'appname' field in the YAWS configuration.
-%%
-%% @spec get_app_name(A::arg()) -> AppName::string() | exit(Err)
-get_app_name(A) ->
-    case proplists:get_value("appname", yaws_arg:opaque(A)) of
-	undefined ->
-	    exit({missing_appname,
-		  "Did you forget to add the 'appname = [name]' "
-		  "to the <opaque> directive in yaws.conf?"});
-	Val ->
-	    Val
-    end.
-
-
 %% @doc Get the relative URL for the application's root path.
 %% 
 %%
@@ -582,3 +560,19 @@ get_app_root(A) ->
 get_app_data(A) ->
     proplists:get_value(app_data_module, yaws_arg:opaque(A)).
 
+%% @doc Get the package name for this webapp.
+%% This function can be used to return a package name for a new app or
+%% to return the package name related with a given server request.
+%%
+%% @spec get_app_package((AppName::atom() | AppName::string() | A::arg())) -> atom()
+get_app_package(AppName) when is_atom(AppName) orelse is_list(AppName) ->
+	smerl:packaged_module('', AppName);
+get_app_package(A) ->
+    case proplists:get_value("package", yaws_arg:opaque(A)) of
+	undefined ->
+	    exit({missing_appname,
+		  "Did you forget to add the 'package = [package]' "
+		  "to the <opaque> directive in yaws.conf?"});
+	Val ->
+	    list_to_atom(Val)
+    end.
