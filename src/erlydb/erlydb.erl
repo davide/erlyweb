@@ -382,7 +382,7 @@ gen_module_code(ModulePath, DefaultDriverMod,
 	    % Module = smerl:get_module(C2),
 	    C2_Temp = preprocess_and_compile(C1),
 	    Module1 = smerl:get_module(C2_Temp),
-	    Module = smerl:module_package(Module1),
+	    Module = smerl:packaged_module(Module1),
 	    C2 = smerl:set_module(C2_Temp, Module),
 
 	    %% get the ErlyDB settings for the driver, taking the defaults

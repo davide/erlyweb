@@ -160,12 +160,13 @@ compile(FileName) ->
 %% @spec compile(FileName::string(), Options::[option()]) -> ok | {error, Err}
 compile(FileName, Options) ->
     BaseName = filename:rootname(filename:basename(FileName)),
-    compile_in_module(list_to_atom(BaseName), FileName, Options).
+    ModuleName = smerl:packaged_module('', BaseName),
+    compile_in_module('', FileName, Options).
 
-%% @spec compile(AppName::string(), FileName::string(), Options::[option()]) -> ok | {error, Err}
-compile(AppName, FileName, Options) ->
+%% @spec compile(InPackage::string(), FileName::string(), Options::[option()]) -> ok | {error, Err}
+compile(InPackage, FileName, Options) ->
     BaseName = filename:rootname(filename:basename(FileName)),
-    ModuleName = smerl:module_package(AppName, BaseName),
+    ModuleName = smerl:packaged_module(InPackage, BaseName),
     compile_in_module(ModuleName, FileName, Options).
 
 %% @doc Compile the ErlTL file with user-defined options. The options are

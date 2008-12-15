@@ -348,7 +348,7 @@ compile_component_file(AppName, ComponentsDir, FileName, LastCompileTimeInSecond
 	  Type} of
 	{{ok, Module}, controller} ->
 	    [{exports, Exports} | _] =
-		(smerl:module_package(Module)):module_info(),
+		(smerl:packaged_module(Module)):module_info(),
 	    Exports1 =
 		lists:foldl(
 		  fun({Name, _}, Acc1)
@@ -543,7 +543,7 @@ get_app_data_module(AppName) when is_list(AppName) ->
     list_to_atom(AppName ++ ".erlyweb_data").
 
 try_func(Module, FuncName, Params, Default) ->
-    case catch apply(smerl:module_package(Module), FuncName, Params) of
+    case catch apply(smerl:packaged_module(Module), FuncName, Params) of
 	{'EXIT', {undef, [{Module, FuncName, _} | _]}} -> Default;
 	{'EXIT', Err} -> exit(Err);
 	Val -> Val

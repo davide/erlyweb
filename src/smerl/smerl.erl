@@ -111,8 +111,8 @@
 	 extend/4,
 	 to_src/1,
 	 to_src/2,
-	 module_package/1,
-	 module_package/2,
+	 packaged_module/1,
+	 packaged_module/2,
 	 module_dir/1
 	]).
 
@@ -1062,14 +1062,16 @@ to_src(MetaMod, FileName) ->
 % --------------------------------------------------------------------------------
 %                     Package handling functions
 % --------------------------------------------------------------------------------
-module_package(Module) when is_atom(Module) ->
+packaged_module(Module) when is_atom(Module) ->
     Module;
-module_package(Module) ->
+packaged_module(Module) ->
    list_to_atom(module_to_list(Module)).
 
-module_package(Package, File) when is_atom(File)->
-    module_package(Package, atom_to_list(File));
-module_package(Package, File) ->
+packaged_module('', File) ->
+	packaged_module(File);
+packaged_module(Package, File) when is_atom(File)->
+    packaged_module(Package, atom_to_list(File));
+packaged_module(Package, File) ->
     list_to_atom(module_to_list(Package) ++ "." ++ File).
 
 module_to_list(Module) when is_atom(Module) ->
