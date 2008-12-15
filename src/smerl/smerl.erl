@@ -1087,8 +1087,8 @@ module_dir(Module) when is_atom(Module) ->
 	true -> string:join(packages:split(Module), "/");
 	false -> atom_to_list(Module)
     end;
-module_dir(Module) ->
-    if	(is_atom(hd(Module))) ->
-        string:join(lists:map({erlang,atom_to_list}, Module), "/");
-        true -> Module
+module_dir(Module) when is_list(Module) ->
+    case is_integer(hd(Module)) of
+	true -> lists:map(fun($.) -> $/; (O) -> O end, Module);
+	false -> string:join(lists:map(fun atom_to_list/1, Module), "/")
     end.
