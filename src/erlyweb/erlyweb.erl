@@ -531,7 +531,8 @@ docroot_file(A) ->
 		undefined ->
 			{redirect, yaws_arg:server_path(A) ++ "/"};
 		Path ->
-			{page, Path}
+			FullPath = get_app_root(A) ++ Path,
+			{page, FullPath}
 	end.
 
 %% @doc Get the name for the application as specified in the opaque 
