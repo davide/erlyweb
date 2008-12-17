@@ -377,9 +377,6 @@ gen_module_code(ModulePath, DefaultDriverMod,
 	       DriversData, Options, IncludePaths, Macros) ->   
     case smerl:for_module(ModulePath, IncludePaths, Macros) of
 	{ok, C1} ->
-	    % Davide was here
-	    % C2 = preprocess_and_compile(C1),
-	    % Module = smerl:get_module(C2),
 	    C2_Temp = preprocess_and_compile(C1),
 	    Module1 = smerl:get_module(C2_Temp),
 	    Module = smerl:packaged_module(Module1),
