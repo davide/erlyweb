@@ -220,7 +220,7 @@ auto_compile(A, AppData, Options) ->
 	case lists:keysearch(auto_compile_exclude, 1,
 			     Options) of
 	    {value, {_, Val}} -> 
-		case string:str(yaws_arg:appmoddata(A),
+		case string:str(yaws_arg:pathinfo(A),
 				Val) of
 		    1 -> ok;
 		    _ -> auto_compile1(Package, AppData, Options)
@@ -323,7 +323,7 @@ handle_request(A, AppController, Ewc, Rest, AppData, PostRenderFun) ->
 %% `exit({no_such_function, Err})'.
 %%
 %% If the request doesn't match any components, this function returns
-%% `{page, Path}', where Path is the arg's appmoddata field.
+%% `{page, Path}', where Path is the arg's pathinfo field (prefixed by app_root).
 %%
 %% If the parameter isn't in the form `{ewc, A}', this function returns
 %% the parameter unchanged without any extra processing.
@@ -527,12 +527,11 @@ get_ewc(ComponentStr, FuncStr, [A | _] = Params,
 
 
 %% @doc Redirect to the application docroot.
-%% I'm counting that appmoddata was already sanitized elsewhere.
 %%
 %% @spec docroot_file(A::arg()) -> {page, NewPath::string()} | 
 %%									{redirect, NewUrl::string()}
 docroot_file(A) ->
-	case yaws_arg:appmoddata(A) of
+	case yaws_arg:pathinfo(A) of
 		undefined ->
 			{redirect, yaws_arg:server_path(A) ++ "/"};
 		Path ->
@@ -546,14 +545,14 @@ docroot_file(A) ->
 get_app_root(A) ->
     ServerPath = yaws_arg:server_path(A),
     L1 = length(ServerPath),
-    L2 = length(yaws_arg:appmoddata(A)),
+    L2 = length(yaws_arg:pathinfo(A)),
     if L2 > L1 ->
 	    "/";
        true ->
 	    {First, _Rest} =
 		lists:split(
 		  length(ServerPath) -
-		  length(yaws_arg:appmoddata(A)),
+		  length(yaws_arg:pathinfo(A)),
 		  ServerPath),
 	    First
     end.
