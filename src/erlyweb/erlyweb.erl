@@ -535,7 +535,8 @@ docroot_file(A) ->
 		undefined ->
 			{redirect, yaws_arg:server_path(A) ++ "/"};
 		Path ->
-			{page, Path}
+			FullPath = get_app_root(A) ++ Path,
+			{page, FullPath}
 	end.
 
 %% @doc Get the relative URL for the application's root path.
