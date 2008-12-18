@@ -467,7 +467,12 @@ render_response_body(A, Response, Controller, View, FuncName, Params,
 	     end,
     RenderFun =
 	fun(Ewc1) ->
-		Rendered = View:FuncName(render_subcomponent(Ewc1, AppData)),
+		% Check if there is a 2-arity version of the view function
+		Rendered =
+			case lists:member({FuncName,2}, View:module_info(exports)) of
+				true -> View:FuncName(A, render_subcomponent(Ewc1, AppData));
+				false -> View:FuncName(render_subcomponent(Ewc1, AppData))
+			end,
 		Controller:after_render(FuncName, Params, Rendered),
 		Rendered
 	end,
@@ -550,24 +555,12 @@ get_app_name(A) ->
     end.
 
 
-%% @doc Get the relative URL for the application's root path.
+%% @doc Refactoring wrapper for yaws_arg:app_root/1
 %% 
 %%
 %% @spec get_app_root(A::arg()) -> string()
 get_app_root(A) ->
-    ServerPath = yaws_arg:server_path(A),
-    L1 = length(ServerPath),
-    L2 = length(yaws_arg:pathinfo(A)),
-    if L2 > L1 ->
-	    "/";
-       true ->
-	    {First, _Rest} =
-		lists:split(
-		  length(ServerPath) -
-		  length(yaws_arg:pathinfo(A)),
-		  ServerPath),
-	    First
-    end.
+    yaws_arg:app_root(A).
 
 get_app_data(A) ->
     proplists:get_value(app_data_module, yaws_arg:opaque(A)).
