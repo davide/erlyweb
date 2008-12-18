@@ -226,20 +226,20 @@ create_component(ComponentName, AppDir, Options) ->
 	      create_file(AppDir ++ "/src/components/" ++ FileName, Text)
       end, Files).
 
-%% @doc Get the  of the arg's appmoddata value up to the
+%% @doc Get the  of the arg's pathinfo value up to the
 %% first '?' symbol.
 %%
 %% @spec get_url_prefix(A::arg()) -> string()
 get_url_prefix(A) ->
-    case yaws_arg:appmoddata(A) of
-	undefined -> "/";
-	AppModData ->
-	    lists:dropwhile(
-	      fun($?) -> true;
-		 (_) -> false
-	      end, AppModData)
+    PathInfo = yaws_arg:pathinfo(A),
+    if	(PathInfo =:= undefined) ->
+		"";
+	true ->
+		lists:dropwhile(
+		      fun($?) -> true;
+			 (_) -> false
+		      end, PathInfo)
     end.
-
 
 %% @doc Get the cookie's value from the arg.
 %% @equiv yaws_api:find_cookie_val(Name, yaws_headers:cookie(A))
