@@ -470,7 +470,12 @@ render_response_body(A, Response, Controller, View, FuncName, Params,
     RenderFun =
 	fun(Ewc1) ->
 		ViewModule = get_app_module(A, View),
-		Rendered = ViewModule:FuncName(render_subcomponent(Ewc1, AppData)),
+		% Check if there is a 2-arity version of the view function
+		Rendered =
+			case lists:member({FuncName,2}, ViewModule:module_info(exports)) of
+				true -> ViewModule:FuncName(A, render_subcomponent(Ewc1, AppData)),
+				false -> ViewModule:FuncName(render_subcomponent(Ewc1, AppData)),
+			end,
 		ControllerModule = get_app_module(A, Controller),
 		ControllerModule:after_render(FuncName, Params, Rendered),
 		Rendered
@@ -539,24 +544,31 @@ docroot_file(A) ->
 			{page, FullPath}
 	end.
 
+<<<<<<< HEAD:src/erlyweb/erlyweb.erl
 %% @doc Get the relative URL for the application's root path.
+=======
+%% @doc Get the name for the application as specified in the opaque 
+%% 'appname' field in the YAWS configuration.
+%%
+%% @spec get_app_name(A::arg()) -> AppName::string() | exit(Err)
+get_app_name(A) ->
+    case proplists:get_value("appname", yaws_arg:opaque(A)) of
+	undefined ->
+	    exit({missing_appname,
+		  "Did you forget to add the 'appname = [name]' "
+		  "to the <opaque> directive in yaws.conf?"});
+	Val ->
+	    Val
+    end.
+
+
+%% @doc Refactoring wrapper for yaws_arg:app_root/1
+>>>>>>> a9fe357... Enabled access to the #arg record to the application views.:src/erlyweb/erlyweb.erl
 %% 
 %%
 %% @spec get_app_root(A::arg()) -> string()
 get_app_root(A) ->
-    ServerPath = yaws_arg:server_path(A),
-    L1 = length(ServerPath),
-    L2 = length(yaws_arg:pathinfo(A)),
-    if L2 > L1 ->
-	    "/";
-       true ->
-	    {First, _Rest} =
-		lists:split(
-		  length(ServerPath) -
-		  length(yaws_arg:pathinfo(A)),
-		  ServerPath),
-	    First
-    end.
+    yaws_arg:app_root(A).
 
 get_app_data(A) ->
     proplists:get_value(app_data_module, yaws_arg:opaque(A)).
