@@ -515,7 +515,7 @@ get_ewc(A) ->
     get_ewc(A, get_app_data(A)).
 
 get_ewc(A, AppData) ->
-    Prefix = erlyweb_util:get_url_prefix(A),
+    Prefix = yaws_arg:url_prefix(A),
     case string:tokens(Prefix, "/") of
 	[] -> docroot_file(A);
 	[ComponentStr]->

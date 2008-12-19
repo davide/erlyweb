@@ -29,7 +29,9 @@
 	 docroot/2, fullpath/1, fullpath/2, cont/1, cont/2, state/1,
 	 state/2, pid/1, pid/2, opaque/1, opaque/2, appmod_prepath/1,
 	 appmod_prepath/2, pathinfo/1, pathinfo/2,
-	 app_root/1]).
+	 app_root/1,
+	 url_prefix/1
+	 ]).
 -include("yaws_api.hrl").
 
 %% @doc Create a new 'arg' record.
@@ -184,3 +186,17 @@ app_root(Arg) ->
 	    string:substr(ServerPath, 1, L2 - L1)
     end.
 
+%% @doc Get the  of the arg's pathinfo value up to the
+%% first '?' symbol.
+%%
+%% @spec get_url_prefix(A::arg()) -> string()
+url_prefix(A) ->
+    PathInfo = yaws_arg:pathinfo(A),
+    if	(PathInfo =:= undefined) ->
+		"";
+	true ->
+		lists:dropwhile(
+		      fun($?) -> true;
+			 (_) -> false
+		      end, PathInfo)
+    end.
