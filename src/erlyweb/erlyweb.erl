@@ -473,8 +473,8 @@ render_response_body(A, Response, Controller, View, FuncName, Params,
 		% Check if there is a 2-arity version of the view function
 		Rendered =
 			case lists:member({FuncName,2}, ViewModule:module_info(exports)) of
-				true -> ViewModule:FuncName(A, render_subcomponent(Ewc1, AppData)),
-				false -> ViewModule:FuncName(render_subcomponent(Ewc1, AppData)),
+				true -> ViewModule:FuncName(A, render_subcomponent(Ewc1, AppData));
+				false -> ViewModule:FuncName(render_subcomponent(Ewc1, AppData))
 			end,
 		ControllerModule = get_app_module(A, Controller),
 		ControllerModule:after_render(FuncName, Params, Rendered),
@@ -544,9 +544,6 @@ docroot_file(A) ->
 			{page, FullPath}
 	end.
 
-<<<<<<< HEAD:src/erlyweb/erlyweb.erl
-%% @doc Get the relative URL for the application's root path.
-=======
 %% @doc Get the name for the application as specified in the opaque 
 %% 'appname' field in the YAWS configuration.
 %%
@@ -561,9 +558,7 @@ get_app_name(A) ->
 	    Val
     end.
 
-
 %% @doc Refactoring wrapper for yaws_arg:app_root/1
->>>>>>> a9fe357... Enabled access to the #arg record to the application views.:src/erlyweb/erlyweb.erl
 %% 
 %%
 %% @spec get_app_root(A::arg()) -> string()
