@@ -101,12 +101,6 @@ querydata(Arg) ->
 querydata(Arg, Val) ->
     Arg#arg{querydata = Val}.
 
-appmoddata(Arg) ->
-    Arg#arg.appmoddata.
-
-appmoddata(Arg, Val) ->
-    Arg#arg{appmoddata = Val}.
-
 docroot(Arg) ->
     Arg#arg.docroot.
 
@@ -148,6 +142,15 @@ appmod_prepath(Arg) ->
 
 appmod_prepath(Arg, Val) ->
     Arg#arg{appmod_prepath = Val}.
+
+appmoddata(Arg) ->
+    case pathinfo(Arg) of
+	undefined -> "/";
+	Pathinfo -> Pathinfo
+    end.
+
+appmoddata(Arg, Val) ->
+    pathinfo(Arg, Val).
 
 pathinfo(Arg) ->
     Arg#arg.pathinfo.
