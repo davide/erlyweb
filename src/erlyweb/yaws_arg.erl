@@ -175,8 +175,12 @@ pathinfo(Arg, Val) ->
 %%
 %% @spec get_app_root(A::arg()) -> string()
 app_root(Arg) ->
-    L1 = if (Arg#arg.pathinfo =:= undefined) -> 0; true -> length(Arg#arg.pathinfo) end,
-    ServerPath =Arg#arg.server_path,
-    L2 = length(ServerPath),
-    string:substr(ServerPath, 1, L2 - L1).
+    case Arg#arg.server_path of
+	"/" -> "";
+	ServerPath  ->
+	    L1 = if (Arg#arg.pathinfo =:= undefined) -> 0; true -> length(Arg#arg.pathinfo) end,
+	    ServerPath =Arg#arg.server_path,
+	    L2 = length(ServerPath),
+	    string:substr(ServerPath, 1, L2 - L1)
+    end.
 
