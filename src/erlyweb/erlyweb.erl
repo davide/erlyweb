@@ -147,9 +147,30 @@ compile(Package, AppDir, Options) ->
 
 %% @doc This is the out/1 function that Yaws calls when passing
 %%  HTTP requests to the ErlyWeb appmod.
+%% Before calling out to erlyweb we'll see if the request was
+%% rewritten by arg_rewrite_mod to serve static content.
 %%
 %% @spec out(A::yaws_arg()) -> ret_val()
 out(A) ->
+    case yaws_arg:pathinfo(A) of
+	undefined ->
+	    % If there is no pathinfo then fullpath = docroot
+	    % and we know for sure that the folder exists
+	    erlyweb_out(A);
+	_Pathinfo ->
+	    FullPath = yaws_arg:fullpath(A),
+	    case (filelib:is_dir(FullPath) orelse filelib:is_regular(FullPath)) of
+		true ->
+		    {page, yaws_arg:server_path(A) };
+		false ->
+		    erlyweb_out(A)
+	    end
+    end.
+
+%% @doc Function that starts erlyweb's work!
+%%
+%% @spec out(A::yaws_arg()) -> ret_val()
+erlyweb_out(A) ->
     Package = get_app_package(A),
     AppData = erlyweb_compile:get_app_data_module(Package),
     AppController =
@@ -198,13 +219,30 @@ out(A, AppController) ->
 	      Ewc ->
 		  Ewc
 	  end,
-    Res = case is_redirect(A, Req) of
-	      {true, Val} ->
-		  Val;
-	      _ ->
-		  handle_request(A, AppController, Req, AppData)
-	  end,
+    Res =
+	case Req of
+	    {page, Path} ->
+		serve_page(A, Path);
+	    _ ->
+		case is_redirect(A, Req) of
+		      {true, Val} ->
+			  Val;
+		      _ ->
+			  case handle_request(A, AppController, Req, AppData) of
+				[{page, Path}] ->
+					serve_page(A, Path);
+				Response ->
+					Response
+			  end
+		  end
+	end,
     Res.
+
+%% @doc Correct the requests for static files to include the app_root prefix.
+%%
+%% @spec serve_file(A::arg(), Path::string()) -> {page, NewPath::string()}
+serve_page(A, Path) ->
+	{page, yaws_arg:app_root(A) ++ Path}.
 
 %% checks that at least 3 seconds have passed since the last compilation
 %% and that the request doesn't match the optional auto_compile_exclude
@@ -323,7 +361,7 @@ handle_request(A, AppController, Ewc, Rest, AppData, PostRenderFun) ->
 %% `exit({no_such_function, Err})'.
 %%
 %% If the request doesn't match any components, this function returns
-%% `{page, Path}', where Path is the arg's pathinfo field (prefixed by app_root).
+%% `{page, Path}', where Path is the arg's pathinfo field.
 %%
 %% If the parameter isn't in the form `{ewc, A}', this function returns
 %% the parameter unchanged without any extra processing.
@@ -506,9 +544,9 @@ get_ewc(A) ->
     get_ewc(A, get_app_data(A)).
 
 get_ewc(A, AppData) ->
-    Prefix = erlyweb_util:get_url_prefix(A),
+    Prefix = yaws_arg:url_prefix(A),
     case string:tokens(Prefix, "/") of
-	[] -> docroot_file(A);
+	[] -> {page, "/"};
 	[ComponentStr]->
 	    get_ewc(ComponentStr, "index", [A],
 		    AppData);
@@ -522,40 +560,15 @@ get_ewc(ComponentStr, FuncStr, [A | _] = Params,
     case AppData:get_component(ComponentStr, FuncStr, Params) of
 	{error, no_such_component} ->
 	    %% if the request doesn't match a controller's name,
-	    %% redirect it to /path
-	    docroot_file(A);
+	    %% return {page, RequestedPath}
+	    case yaws_arg:pathinfo(A) of
+		undefined -> {page, "/"};
+		Path -> {page, Path}
+	    end;
 	{error, no_such_function} ->
 	    exit({no_such_function, {ComponentStr, FuncStr, length(Params)}});
 	{ok, Component} ->
 	    Component
-    end.
-
-
-%% @doc Redirect to the application docroot.
-%%
-%% @spec docroot_file(A::arg()) -> {page, NewPath::string()} | 
-%%									{redirect, NewUrl::string()}
-docroot_file(A) ->
-	case yaws_arg:pathinfo(A) of
-		undefined ->
-			{redirect, yaws_arg:server_path(A) ++ "/"};
-		Path ->
-			FullPath = get_app_root(A) ++ Path,
-			{page, FullPath}
-	end.
-
-%% @doc Get the name for the application as specified in the opaque 
-%% 'appname' field in the YAWS configuration.
-%%
-%% @spec get_app_name(A::arg()) -> AppName::string() | exit(Err)
-get_app_name(A) ->
-    case proplists:get_value("appname", yaws_arg:opaque(A)) of
-	undefined ->
-	    exit({missing_appname,
-		  "Did you forget to add the 'appname = [name]' "
-		  "to the <opaque> directive in yaws.conf?"});
-	Val ->
-	    Val
     end.
 
 %% @doc Refactoring wrapper for yaws_arg:app_root/1

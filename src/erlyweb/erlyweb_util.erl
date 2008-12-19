@@ -10,10 +10,10 @@
 
 -module(erlyweb_util).
 -author("Yariv Sadan (yarivsblog@gmail.com, http://yarivsblog.com").
+
 -export([
 	 create_app/3,
 	 create_component/4,
-	 get_url_prefix/1,
 	 get_cookie/2,
 	 indexify/2,
 	 log/5
@@ -330,21 +330,6 @@ create_component(Package, AppDir, ComponentName, Options) ->
       fun({FileName, Text}) ->
 	      create_file(AppDir ++ "/src/components/" ++ FileName, Text)
       end, Files).
-
-%% @doc Get the  of the arg's pathinfo value up to the
-%% first '?' symbol.
-%%
-%% @spec get_url_prefix(A::arg()) -> string()
-get_url_prefix(A) ->
-    PathInfo = yaws_arg:pathinfo(A),
-    if	(PathInfo =:= undefined) ->
-		"";
-	true ->
-		lists:dropwhile(
-		      fun($?) -> true;
-			 (_) -> false
-		      end, PathInfo)
-    end.
 
 %% @doc Get the cookie's value from the arg.
 %% @equiv yaws_api:find_cookie_val(Name, yaws_headers:cookie(A))
