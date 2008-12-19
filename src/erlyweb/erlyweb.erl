@@ -154,10 +154,19 @@ compile(AppDir, Options) ->
 %%
 %% @spec out(A::yaws_arg()) -> ret_val()
 out(A) ->
-    FullPath = yaws_arg:fullpath(A),
-    case (filelib:is_dir(FullPath) orelse filelib:is_regular(FullPath)) of
-        true -> docroot_file(A);
-	false -> erlyweb_out(A)
+    case yaws_arg:pathinfo(A) of
+	undefined ->
+	    % If there is no pathinfo then fullpath = docroot
+	    % and we know for sure that the folder exists
+	    erlyweb_out(A);
+	_Pathinfo ->
+	    FullPath = yaws_arg:fullpath(A),
+	    case (filelib:is_dir(FullPath) orelse filelib:is_regular(FullPath)) of
+		true ->
+		    {page, yaws_arg:server_path(A) };
+		false ->
+		    erlyweb_out(A)
+	    end
     end.
 
 %% @doc Function that starts erlyweb's work!
