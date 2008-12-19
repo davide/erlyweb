@@ -23,7 +23,8 @@
 	 get_initial_ewc/1,
 	 get_ewc/1,
 	 get_app_name/1,
-	 get_app_root/1
+	 get_app_root/1,
+	 docroot_file/1
 	]).
 
 
@@ -148,9 +149,21 @@ compile(AppDir, Options) ->
 
 %% @doc This is the out/1 function that Yaws calls when passing
 %%  HTTP requests to the ErlyWeb appmod.
+%% Before calling out to erlyweb we'll see if the request was
+%% rewritten by arg_rewrite_mod to serve static content.
 %%
 %% @spec out(A::yaws_arg()) -> ret_val()
 out(A) ->
+    FullPath = yaws_arg:fullpath(A),
+    case (filelib:is_dir(FullPath) orelse filelib:is_regular(FullPath)) of
+        true -> docroot_file(A);
+	false -> erlyweb_out(A)
+    end.
+
+%% @doc Function that starts erlyweb's work!
+%%
+%% @spec out(A::yaws_arg()) -> ret_val()
+erlyweb_out(A) ->
     AppName = get_app_name(A),
     AppData = erlyweb_compile:get_app_data_module(AppName),
     AppController =
