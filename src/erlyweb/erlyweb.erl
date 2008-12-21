@@ -150,13 +150,17 @@ compile(Package, AppDir, Options) ->
 %% Before calling out to erlyweb we'll see if the request was
 %% rewritten by arg_rewrite_mod to serve static content.
 %%
+%% If pathinfo = undefined or "/" we know we have a request for the
+%% webapp's root. Under these circumstances we let erlyweb handle the
+%% request because otherwise we'd be serving the docroot under "/".
+%%
 %% @spec out(A::yaws_arg()) -> ret_val()
 out(A) ->
     case yaws_arg:pathinfo(A) of
 	undefined ->
-	    % If there is no pathinfo then fullpath = docroot
-	    % and we know for sure that the folder exists
-	    erlyweb_out(A);
+		erlyweb_out(A);
+	"/" ->
+		erlyweb_out(A);
 	_Pathinfo ->
 	    FullPath = yaws_arg:fullpath(A),
 	    case (filelib:is_dir(FullPath) orelse filelib:is_regular(FullPath)) of
