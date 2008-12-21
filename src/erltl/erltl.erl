@@ -160,13 +160,13 @@ compile(FileName) ->
 %% @spec compile(FileName::string(), Options::[option()]) -> ok | {error, Err}
 compile(FileName, Options) ->
     BaseName = filename:rootname(filename:basename(FileName)),
-    Module = smerl:packaged_module('', BaseName),
+    Module = list_to_atom(packages_ext:concat('', BaseName)),
     compile_in_module(Module, FileName, Options).
 
 %% @spec compile(InPackage::string(), FileName::string(), Options::[option()]) -> ok | {error, Err}
 compile(InPackage, FileName, Options) ->
     BaseName = filename:rootname(filename:basename(FileName)),
-    Module = smerl:packaged_module(InPackage, BaseName),
+    Module = list_to_atom(packages_ext:concat(InPackage, BaseName)),
     compile_in_module(Module, FileName, Options).
 
 %% @doc Compile the ErlTL file with user-defined options. The options are
@@ -191,13 +191,13 @@ compile_in_module(Module, FileName, Options) ->
 				 {value, {outdir, Val}} -> Val;
 				 false -> filename:dirname(FileName)
 			     end,
-		    ModuleDir = smerl:module_dir(Module),
-		    case file:write_file(OutDir ++ ['/' | ModuleDir] ++
+		    ModulePath = packages_ext:to_path(Module),
+		    case file:write_file(OutDir ++ [$/ | ModulePath] ++
 					 ".beam", Bin) of
 			ok ->
 			    code:purge(Module),
 			    case code:load_binary(
-				   Module, atom_to_list(Module), Bin)
+				   Module, packages_ext:last(Module) ++ ".et", Bin)
 				of
 				{module, _Module} ->
 				    ok;

@@ -42,6 +42,7 @@ create_app(AppName, Dir, Package) ->
 		   AppDir ++ "/www",
 		   AppDir ++ "/ebin",
 		   AppDir ++ "/log"],
+	    PackageDirs = packages_ext:package_dirs(Package, AppDir ++ "/ebin/"),
 	    lists:foreach(
 	      fun(SubDir) ->
 		      ?Info("creating ~p", [SubDir]),
@@ -51,18 +52,9 @@ create_app(AppName, Dir, Package) ->
 			  Err ->
 			      exit(Err)
 		      end
-	      end, [AppDir | Dirs]),
+	      end, [AppDir | Dirs ++ PackageDirs]),
 	
-	    PackageRelDir = smerl:module_dir(Package),
-	    PackageDir = AppDir ++ "/ebin/" ++ PackageRelDir ++ "/",
-	    ?Info("creating package directory structure ~p", [PackageDir]),
-	      case filelib:ensure_dir(PackageDir) of
-		  ok ->
-		      ok;
-		  Err ->
-		      exit(Err)
-	      end,
-
+	    PackageDir = tl(PackageDirs),
 	    Files =
 		[{ComponentsDir ++ "/html_container_view.et",
 		  html_container_view(AppName)},
@@ -77,8 +69,8 @@ create_app(AppName, Dir, Package) ->
 		  {SrcDir ++ "/boot.erl", boot_file(Package)},
 		  {SrcDir ++ "/app.hrl", app_file(AppDir)},
 		  {AppDir ++ "/yaws.conf", yaws_conf(Package, AppName)},
-		  {AppDir ++ "/Makefile", makefile(AppName, PackageRelDir)},
-		  {AppDir ++ "/Emakefile", emakefile(PackageRelDir)}],
+		  {AppDir ++ "/Makefile", makefile(AppName, PackageDir)},
+		  {AppDir ++ "/Emakefile", emakefile(PackageDir)}],
 	    lists:foreach(
 	      fun({FileName, Bin}) ->
 		      create_file(FileName, Bin)

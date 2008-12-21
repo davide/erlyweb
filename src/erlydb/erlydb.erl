@@ -378,8 +378,7 @@ gen_module_code(ModulePath, DefaultDriverMod,
     case smerl:for_module(ModulePath, IncludePaths, Macros) of
 	{ok, C1} ->
 	    C2_Temp = preprocess_and_compile(C1),
-	    Module1 = smerl:get_module(C2_Temp),
-	    Module = smerl:packaged_module(Module1),
+	    Module = packages_ext:atomize(smerl:get_module(C2_Temp)),
 	    C2 = smerl:set_module(C2_Temp, Module),
 
 	    %% get the ErlyDB settings for the driver, taking the defaults

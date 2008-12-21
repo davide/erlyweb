@@ -342,7 +342,7 @@ compile_component_file(Package, ComponentsDir, FileName, LastCompileTimeInSecond
 	  Type} of
 	{{ok, Module}, controller} ->
 	    [{exports, Exports} | _] =
-		(smerl:packaged_module(Module)):module_info(),
+		(packages_ext:atomize(Module)):module_info(),
 	    Exports1 =
 		lists:foldl(
 		  fun({Name, _}, Acc1)
@@ -532,10 +532,10 @@ add_func(MetaMod, Name, Arity, Str) ->
     end.
 
 get_app_data_module(Package) ->
-    smerl:packaged_module(Package, "erlyweb_data").
+    list_to_atom(packages_ext:concat(Package, "erlyweb_data")).
 
 try_func(Module, FuncName, Params, Default) ->
-    case catch apply(smerl:packaged_module(Module), FuncName, Params) of
+    case catch apply(packages_ext:atomize(Module), FuncName, Params) of
 	{'EXIT', {undef, [{Module, FuncName, _} | _]}} -> Default;
 	{'EXIT', Err} -> exit(Err);
 	Val -> Val

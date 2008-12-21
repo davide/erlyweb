@@ -591,7 +591,7 @@ get_app_data(A) ->
 %%
 %% @spec get_app_package((AppName::atom() | AppName::string() | A::arg())) -> atom()
 get_app_package(AppName) when is_atom(AppName) orelse is_list(AppName) ->
-	smerl:packaged_module('', AppName);
+	list_to_atom(packages_ext:concat('', AppName));
 get_app_package(A) ->
     case proplists:get_value("package", yaws_arg:opaque(A)) of
 	undefined ->
@@ -603,4 +603,4 @@ get_app_package(A) ->
     end.
 
 get_app_module(A, ModuleName) -> 
-    smerl:packaged_module(get_app_package(A), ModuleName).
+    list_to_atom(packages_ext:concat(get_app_package(A), ModuleName)).

@@ -110,10 +110,7 @@
 	 extend/3,
 	 extend/4,
 	 to_src/1,
-	 to_src/2,
-	 packaged_module/1,
-	 packaged_module/2,
-	 module_dir/1
+	 to_src/2
 	]).
 
 -define(L(Obj), io:format("LOG ~s ~w ~p\n", [?FILE, ?LINE, Obj])).
@@ -347,7 +344,9 @@ get_dirs_in_dir(Dir) ->
 %% @doc Try to infer module source files from the beam code path.
 get_forms_from_binary(Module, OrigErr) ->
     Ret = 
-	case code:where_is_file(module_to_list(Module) ++ ".beam") of
+	% PACKAGED ERLYWEB INFO:
+	% code:where_is_file doesn't have any support for packages!
+	case code:where_is_file(packages_ext:last(Module) ++ ".beam") of
 	    non_existing ->
 		OrigErr;
 	    Filename ->
@@ -371,7 +370,9 @@ get_forms_from_binary(Module, OrigErr) ->
 get_forms_from_file_list(_Module, _Basedir, []) ->
     [];
 get_forms_from_file_list(Module, Basedir, [H|T]) ->
-    Filename = H ++ "/" ++ module_to_list(Module) ++ ".erl",
+    % PACKAGED ERLYWEB INFO: this should work since w/ or w/o using packages
+    % the filename matches the last module name segment.
+    Filename = H ++ "/" ++ packages_ext:last(Module) ++ ".erl",
     case file:read_file_info(Filename) of
 	{ok, #file_info{type=regular}} ->
 	    epp:parse_file(Filename, [filename:dirname(Filename)], []);
@@ -589,23 +590,20 @@ compile(MetaMod, Options) ->
 	     {attribute, 3, export, get_exports(MetaMod)}],
     FileName =
 	case MetaMod#meta_mod.file of
-	    undefined -> module_to_list(get_module(MetaMod));
+	    undefined -> packages_ext:to_path(get_module(MetaMod));
 	    Val -> Val
 	end,
 
     Forms1 = [{attribute, 1, file, {FileName, 1}} | Forms],
     Forms2 = Forms1 ++ lists:reverse(MetaMod#meta_mod.forms),
-    
+
     case compile:forms(Forms2, Options) of
 	{ok, Module, Bin} ->
-	    ModuleDir = module_dir(MetaMod#meta_mod.module),
 	    Res = 
 		case lists:keysearch(outdir, 1, Options) of
 		    {value, {outdir, OutDir}} ->
-			file:write_file(
-			  OutDir ++
-			  ['/' | ModuleDir] ++
-			  ".beam", Bin);
+			ModulePath = packages_ext:to_path(Module),
+			file:write_file(OutDir++[$/, ModulePath]++".beam", Bin);
 		    false -> ok
 		end,
 	    case Res of
@@ -613,7 +611,7 @@ compile(MetaMod, Options) ->
 		    code:purge(Module),
 		    case code:load_binary(
 			   Module,
-			   ModuleDir ++ ".erl", Bin) of
+			   packages_ext:last(Module) ++ ".erl", Bin) of
 			{module, _Module} ->
 			    ok;
 			Err ->
@@ -1058,37 +1056,3 @@ to_src(MetaMod) ->
 to_src(MetaMod, FileName) ->
     Src = to_src(MetaMod),
     file:write_file(FileName, list_to_binary(Src)).
-
-% --------------------------------------------------------------------------------
-%                     Package handling functions
-% --------------------------------------------------------------------------------
-packaged_module(Module) when is_atom(Module) ->
-    Module;
-packaged_module(Module) ->
-   list_to_atom(module_to_list(Module)).
-
-packaged_module('', File) ->
-	packaged_module(File);
-packaged_module(Package, File) when is_atom(File)->
-    packaged_module(Package, atom_to_list(File));
-packaged_module(Package, File) ->
-    list_to_atom(module_to_list(Package) ++ "." ++ File).
-
-module_to_list(Module) when is_atom(Module) ->
-	atom_to_list(Module);
-module_to_list(Module) ->
-    if	(is_atom(hd(Module))) ->
-        packages:concat(Module);
-        true -> Module
-    end.
-
-module_dir(Module) when is_atom(Module) ->
-    case packages:is_segmented(Module) of
-	true -> string:join(packages:split(Module), "/");
-	false -> atom_to_list(Module)
-    end;
-module_dir(Module) when is_list(Module) ->
-    case is_integer(hd(Module)) of
-	true -> lists:map(fun($.) -> $/; (O) -> O end, Module);
-	false -> string:join(lists:map(fun atom_to_list/1, Module), "/")
-    end.
