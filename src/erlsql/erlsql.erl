@@ -314,6 +314,8 @@ extra_clause({group_by, ColNames}, _Safe) ->
 extra_clause({group_by, ColNames, having, Expr}, Safe) ->
     [extra_clause({group_by, ColNames}, Safe), <<" HAVING ">>,
      expr(Expr, Safe)];
+extra_clause({special, Val}, _Safe) ->
+    [Val];
 extra_clause({order_by, ColNames}, Safe) ->
     [<<" ORDER BY ">>,
      make_list(ColNames,

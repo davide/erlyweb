@@ -30,7 +30,8 @@
          select/2,
          select_as/3,
          update/2,
-         get_last_insert_id/2]).
+         get_last_insert_id/2,
+         get_next_insert_id/2]).
 
 
 %% Useful for debugging
@@ -146,6 +147,33 @@ parse_default(DefaultStr) ->
             {undefined, identity}
     end.
 
+%%@doc Fixes statement for postgres-specific elements, such as using sequence
+%%when insert (instead of autoicrement), LIMIT/OFFSET syntax when paginating,
+%%and so on
+fix_statement({select, _Fields, _From, _Where, Extras}) ->
+    {select, _Fields, _From, _Where, extras(Extras)};
+fix_statement({insert, Table, Fields, Rows}) ->
+    Rows2 = lists:map(fun(Row) ->
+        {ok, Id} = get_next_insert_id(Table, []),
+        [Id] ++ Row
+        end, Rows),
+    {insert, Table,  [id] ++ Fields, Rows2};
+fix_statement(_X) ->
+    _X.
+
+extras(E) when is_list(E) ->
+    extra_l(E);
+extras(E) ->
+    extra(E).
+
+extra_l([]) -> [];
+extra_l([H | T]) ->
+    [extra(H)] ++ extra_l(T).
+
+extra({limit, From, Limit}) ->
+    {special, [<<" LIMIT ">>, erlsql:encode(Limit), <<" OFFSET ">> , erlsql:encode(From)]};
+extra(_X) -> _X.
+
 %% @doc Execute a statement directly against the PostgreSQL driver. If
 %% Options contains the value {allow_unsafe_sql, true}, binary and string
 %% queries as well as ErlSQL queries with binary and/or string expressions are
@@ -155,11 +183,12 @@ q(Statement) ->
 
 
 q({esql, Statement}, Options) ->
+    Statement2 = fix_statement(Statement),
     case allow_unsafe_statements(Options) of
         true -> 
-            {ok, q2(erlsql:unsafe_sql(Statement), Options)};
+            {ok, q2(erlsql:unsafe_sql(Statement2), Options)};
         _ ->
-            case catch erlsql:sql(Statement) of
+            case catch erlsql:sql(Statement2) of
                 {error, _} = Err ->
                     exit(Err);
                 Sql ->
@@ -178,7 +207,7 @@ q2(Statement) ->
     q2(Statement, undefined).
   
             
-%% @doc Execute a (binary or string) statement against the MySQL driver.
+%% @doc Execute a (binary or string) statement against the PostgreSQL driver.
 %%
 %% @spec q2(Statement::string() | binary(), Options::proplist()) ->
 %%   psql_result()                      
@@ -189,7 +218,8 @@ q2(Statement, _Options) ->
     Result.
 
 
-q3(Pid, Sql) ->    
+q3(Pid, Sql) ->
+    %%?L(Sql),
     case psql:sql_query(Pid, Sql) of     
         {_FieldInfo,[{_Status, Rows}]} ->      
             Rows;
@@ -198,7 +228,6 @@ q3(Pid, Sql) ->
         Other ->
             Other
     end.
-
 
 allow_unsafe_statements(undefined) ->
     false;
@@ -303,10 +332,19 @@ get_update_element(N, Bin) ->
 %%
 %% @spec get_last_insert_id(TableName::atom(), Options::proplist()) -> term()
 get_last_insert_id(Table, Options) -> 
-    TableName = atom_to_list(Table),   
-    Sql = "SELECT currval('" ++ TableName ++ "_id_seq');", 
+    Sql = "SELECT currval('" ++ get_sequence_name(Table) ++ "');",
     case q2(Sql, Options) of
         [{N}] ->  {ok, N};
         Err -> exit(Err)   
     end.
 
+get_next_insert_id(Table, Options) ->
+    Sql = "SELECT nextval('" ++ get_sequence_name(Table) ++ "');",
+    case q2(Sql, Options) of
+        [{N}] ->  {ok, N};
+        Err -> exit(Err)
+    end.
+
+get_sequence_name(Table) ->
+    TableName = atom_to_list(Table),
+    TableName ++ "_id_seq".
