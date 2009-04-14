@@ -486,16 +486,39 @@ render_response_body(A, Response, Controller, View, FuncName, Params,
 	       end, Elems2),
     {response, Elems3}.
 
+convert_value(Value) when is_list(Value) ->
+    Value;
+convert_value(Value) when is_atom(Value) ->
+    atom_to_list(Value);
+convert_value(Value) when is_binary(Value) ->
+    binary_to_list(Value);
+
+convert_value(Value) ->
+    io:format("I full dead:~p~n",[Value]),
+    "I can reconvert result for error".
+
+
 render_subcomponent(Ewc, AppData) ->
-    case ewc(Ewc, AppData) of
-	{response, [{rendered, Rendered}]} ->
-	    Rendered;
-	{response, Other} ->
-	    exit({invalid_response, Other,
-                 "Response values other than 'data' and "
-                 "'ewc' tuples must be enclosed a 'response' tuple. "
-                 "In addition, subcomponents may only return "
-                 "'data' and/or 'ewc' tuples."})
+    try
+	case ewc(Ewc, AppData) of
+	    {response, [{rendered, Rendered}]} ->
+		Rendered;
+	    {response, Other} ->
+	        exit({invalid_response, Other,
+		"Response values other than 'data' and "
+		 "'ewc' tuples must be enclosed a 'response' tuple. "
+		 "In addition, subcomponents may only return "
+		 "'data' and/or 'ewc' tuples."})
+        end
+    catch
+	Sub : Reson ->
+		io:format("Error sub error:~p~n",[{Sub,erlang:get_stacktrace()}]),
+		case Ewc of
+		    {ewc,Name,_} ->
+			list_to_binary("Error in component '" ++ convert_value(Name) ++ "'. I think this '" ++ convert_value(Reson) ++ "'");
+		    _ ->
+			list_to_binary("Error on unknow component. I think '" ++ convert_value(Reson) ++ "'")
+		end
     end.
 
 get_ewc(A) ->
