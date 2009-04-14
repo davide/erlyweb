@@ -93,23 +93,36 @@ compile(AppDir, Options) ->
 	{ok, _} -> ok;
 	{ok, _, _, _} -> ok;
 	ok -> ok;
-	Err -> ?Error("Error compiling app controller", []),
+	Err -> ?Error("Error compiling app controller: File: ~p, Str: ~s.erl ~n", [AppControllerFilePath, AppControllerStr]),
 	       exit(Err)
     end,
 
     AppController = list_to_atom(AppControllerStr),
     try_func(AppController, before_compile, [LastCompileTime], ok),
 
-    ComponentsDir = http_util:to_lower(AppDir1 ++ "src/components"),
+    ComponentsDir = case os:type() of
+    {unix, _} ->
+        AppDir1 ++ "src/components";
+    _ ->
+        http_util:to_lower(AppDir1 ++ "src/components")
+    end,
     {ComponentTree1, Models} =
 	filelib:fold_files(
 	  AppDir1 ++ "src", "\.(erl|et)$", true,
 	  fun(FileName, Acc) ->
 		  if FileName =/= AppControllerFilePath ->
-			  compile_component_file(
-			    ComponentsDir, http_util:to_lower(FileName),
-			    LastCompileTimeInSeconds, Options3, IncludePaths, Macros,
-			    Acc);
+		  	 case os:type() of
+    				{unix, _} ->
+			  			compile_component_file(
+			    			ComponentsDir, FileName,
+			    			LastCompileTimeInSeconds, Options3, IncludePaths, Macros,
+			    			Acc);
+					_ ->
+						compile_component_file(
+			    			ComponentsDir, http_util:to_lower(FileName),
+			    			LastCompileTimeInSeconds, Options3, IncludePaths, Macros,
+			    			Acc)
+			  end;
 		     true ->
 			  Acc
 		  end
